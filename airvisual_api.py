@@ -1,6 +1,10 @@
 import requests
 import time
+import sys
 from datetime import datetime
+
+sys.stdout.reconfigure(encoding='utf-8')
+
 
 # ──────────────────────────────────────────────────────────────
 # Funciones auxiliares comunes

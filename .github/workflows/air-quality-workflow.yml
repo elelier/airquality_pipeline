@@ -22,6 +22,6 @@ jobs:
           echo AIRVISUAL_API_KEY=${{ secrets.AIRVISUAL_API_KEY }} > .env
           echo SUPABASE_URL=${{ secrets.SUPABASE_URL }} >> .env
           echo SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} >> .env
-      - name: Run script
+      - name: Run main.py
         run: |
           python main.py

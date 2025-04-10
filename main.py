@@ -1,14 +1,26 @@
-import time
+import sys
+import os
+from dotenv import load_dotenv
 from airvisual_api import fetch_cities, fetch_air_quality_data
 from supabase_client import get_existing_cities
 from sync_cities import sync_cities
 from utils import check_if_update_needed
 from update_city import update_city
-import os
+
+sys.stdout.reconfigure(encoding='utf-8')
+load_dotenv()
+
+
+
+
 
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 AIRVISUAL_API_KEY = os.getenv('AIRVISUAL_API_KEY')
+
+if not all([SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AIRVISUAL_API_KEY]):
+    raise EnvironmentError("❌ Variables de entorno faltantes. Verifica tu archivo .env o los secretos en GitHub Actions.")
+
 
 # Función para obtener las ciudades activas
 def get_active_cities(db_cities_list):
@@ -73,9 +85,6 @@ def main():
         # En caso de que ocurra un error, lo manejamos y seguimos
         print(f"⚠️ Ocurrió un error: {e}")
     
-    # Espera de 3 horas antes de volver a ejecutar el ciclo
-    # print("🔄 Esperando 3 horas para la próxima ejecución...")
-    # time.sleep(3 * 60 * 60)  # Espera de 3 horas (3 horas * 60 minutos * 60 segundos)
-
 if __name__ == "__main__":
         main()
+        print("\n🚀 Pipeline terminado exitosamente.\n")

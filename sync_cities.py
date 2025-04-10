@@ -1,6 +1,9 @@
 from supabase import create_client, Client
 from datetime import datetime
 
+
+
+
 def sync_cities(api_cities_list, db_cities_list, supabase_url, supabase_service_role_key, deactivate_missing_cities=True, logging=print):
     logging('--- Iniciando Sync Cities (Add New / Deactivate Old) ---')
 
@@ -26,6 +29,12 @@ def sync_cities(api_cities_list, db_cities_list, supabase_url, supabase_service_
 
     if not isinstance(db_cities_list, list):
         msg = 'Input dbCitiesList no es un array válido.'
+        summary['errors'].append({'operation': 'validation', 'message': msg})
+        logging(msg)
+        return summary
+
+    if api_cities_list and not all("city" in c for c in api_cities_list):
+        msg = 'Cada ciudad en apiCitiesList debe tener la propiedad "city".'
         summary['errors'].append({'operation': 'validation', 'message': msg})
         logging(msg)
         return summary
