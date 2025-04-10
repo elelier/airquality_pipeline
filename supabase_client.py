@@ -6,6 +6,8 @@ import jwt
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
+SUPABASE_SERVICE_ROLE_KEY = SUPABASE_SERVICE_ROLE_KEY.encode('utf-8')
+
 payload = jwt.decode(SUPABASE_SERVICE_ROLE_KEY, options={"verify_signature": False})
 print(f"🔑 Detalle del token: rol = {payload.get('role')}")
 
