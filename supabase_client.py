@@ -1,8 +1,10 @@
 from supabase import create_client, Client
 import os
 
-from config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 import jwt
+
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 payload = jwt.decode(SUPABASE_SERVICE_ROLE_KEY, options={"verify_signature": False})
 print(f"🔑 Detalle del token: rol = {payload.get('role')}")

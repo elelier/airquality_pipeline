@@ -2,9 +2,13 @@ import time
 from airvisual_api import fetch_cities, fetch_air_quality_data
 from supabase_client import get_existing_cities
 from sync_cities import sync_cities
-from config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AIRVISUAL_API_KEY
 from utils import check_if_update_needed
 from update_city import update_city
+import os
+
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+AIRVISUAL_API_KEY = os.getenv('AIRVISUAL_API_KEY')
 
 # Función para obtener las ciudades activas
 def get_active_cities(db_cities_list):
@@ -74,5 +78,4 @@ def main():
     time.sleep(3 * 60 * 60)  # Espera de 3 horas (3 horas * 60 minutos * 60 segundos)
 
 if __name__ == "__main__":
-    while True:  # Bucle infinito para que corra sin parar
         main()

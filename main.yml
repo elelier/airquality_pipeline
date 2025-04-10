@@ -1,0 +1,24 @@
+name: Ejecutar Pipeline
+
+on:
+  schedule:
+    - cron: '*/3 * * * *'  # Cada 3 horas
+
+jobs:
+  run-pipeline:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+      - name: Configurar variables de entorno
+        run: |
+          echo "AIRVISUAL_API_KEY=${{ secrets.AIRVISUAL_API_KEY }}" > .env
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
+      - name: Ejecutar script
+        run: python main.py
