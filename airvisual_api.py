@@ -39,12 +39,12 @@ def fetch_with_retry(url, retries=5, delay_ms=5000, params=None, logging=None):
 # Función para obtener ciudades
 # ──────────────────────────────────────────────────────────────
 
-def fetch_cities(api_key: str, state: str = "Nuevo Leon", country: str = "Mexico", max_retries: int = 3):
+def fetch_cities(AIRVISUAL_API_KEY: str, state: str = "Nuevo Leon", country: str = "Mexico", max_retries: int = 3):
     url = "http://api.airvisual.com/v2/cities"
     params = {
         "state": state,
         "country": country,
-        "key": api_key
+        "key": AIRVISUAL_API_KEY
     }
 
     for attempt in range(1, max_retries + 1):
@@ -74,7 +74,7 @@ def fetch_cities(api_key: str, state: str = "Nuevo Leon", country: str = "Mexico
 # Función para obtener la calidad del aire de una ciudad
 # ──────────────────────────────────────────────────────────────
 
-def fetch_air_quality_data(api_name, city_id, state, country, api_key, logging=print):
+def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY, logging=print):
     logging(f"--- Iniciando fetchAirQualityData para City ID: {city_id} ({api_name}) ---")
 
     url = "http://api.airvisual.com/v2/city"
@@ -82,7 +82,7 @@ def fetch_air_quality_data(api_name, city_id, state, country, api_key, logging=p
         "city": api_name,
         "state": state,
         "country": country,
-        "key": api_key
+        "key": AIRVISUAL_API_KEY
     }
 
     try:

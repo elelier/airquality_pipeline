@@ -49,7 +49,7 @@ def main():
                     city_id=city['id'],
                     state="Nuevo Leon",
                     country="Mexico",
-                    api_key=AIRVISUAL_API_KEY
+                    AIRVISUAL_API_KEY=AIRVISUAL_API_KEY
                 )
                 fetch_result['city_id'] = city['id']  # Agregamos el ID local
 
