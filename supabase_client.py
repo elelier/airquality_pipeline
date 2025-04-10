@@ -12,16 +12,35 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 if not SUPABASE_SERVICE_ROLE_KEY:
     raise ValueError("SUPABASE_SERVICE_ROLE_KEY no está configurada")
 
-# Convertir la clave a bytes solo para decodificar el token
-SUPABASE_SERVICE_ROLE_KEY_bytes = SUPABASE_SERVICE_ROLE_KEY.encode('utf-8')
-payload = jwt.decode(SUPABASE_SERVICE_ROLE_KEY_bytes, options={"verify_signature": False})
-print(f"🔑 Detalle del token: rol = {payload.get('role')}")
+# Verificar que la clave tenga un formato válido de JWT
+try:
+    # Primero intentamos decodificar la clave original
+    payload = jwt.decode(SUPABASE_SERVICE_ROLE_KEY, options={"verify_signature": False})
+    print(f"🔑 Detalle del token: rol = {payload.get('role')}")
+except Exception as e:
+    print(f"⚠️ Error decodificando el token: {str(e)}")
+    # Si falla, intentamos con la versión en bytes
+    try:
+        SUPABASE_SERVICE_ROLE_KEY_bytes = SUPABASE_SERVICE_ROLE_KEY.encode('utf-8')
+        payload = jwt.decode(SUPABASE_SERVICE_ROLE_KEY_bytes, options={"verify_signature": False})
+        print(f"🔑 Detalle del token: rol = {payload.get('role')}")
+    except Exception as e:
+        print(f"⚠️ Error decodificando el token en bytes: {str(e)}")
+        raise ValueError("La SUPABASE_SERVICE_ROLE_KEY no parece ser un token JWT válido")
 
 def is_probably_service_role(key: str) -> bool:
     try:
-        # No necesitamos convertir a bytes aquí
-        payload = jwt.decode(key, options={"verify_signature": False})
-        return payload.get("role") == "service_role"
+        # Intentamos decodificar tanto la versión string como bytes
+        try:
+            payload = jwt.decode(key, options={"verify_signature": False})
+            return payload.get("role") == "service_role"
+        except:
+            try:
+                key_bytes = key.encode('utf-8')
+                payload = jwt.decode(key_bytes, options={"verify_signature": False})
+                return payload.get("role") == "service_role"
+            except:
+                return False
     except Exception:
         return False
 
