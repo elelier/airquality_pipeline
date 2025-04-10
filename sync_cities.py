@@ -69,15 +69,17 @@ def sync_cities(api_cities_list, db_cities_list, supabase_url, supabase_service_
         if cities_to_insert:
             logging(f"🔄 Intentando insertar {len(cities_to_insert)} ciudades nuevas...")
             result = supabase.table('cities').insert(cities_to_insert).execute()
-            if result.get('error'):
-                logging(f"❌ Error al insertar nuevas ciudades: {result['error']['message']}")
+
+            # Acceder a error y datos correctamente
+            if result.error:
+                logging(f"❌ Error al insertar nuevas ciudades: {result.error['message']}")
                 summary['errors'].append({
                     "operation": "insert_new",
-                    "message": result['error']['message'],
-                    "details": result['error']
+                    "message": result.error['message'],
+                    "details": result.error
                 })
             else:
-                inserted_count = len(result.get('data', []))
+                inserted_count = len(result.data)
                 summary['newCitiesAdded'] = inserted_count
                 logging(f"✅ {inserted_count} ciudades nuevas insertadas exitosamente.")
         else:
@@ -91,12 +93,14 @@ def sync_cities(api_cities_list, db_cities_list, supabase_url, supabase_service_
                 "updated_at": datetime.utcnow().isoformat()
             }
             result = supabase.table('cities').update(updates).in_('id', city_ids_to_deactivate).execute()
-            if result.get('error'):
-                logging(f"❌ Error al desactivar ciudades ausentes: {result['error']['message']}")
+
+            # Acceder a error y datos correctamente
+            if result.error:
+                logging(f"❌ Error al desactivar ciudades ausentes: {result.error['message']}")
                 summary['errors'].append({
                     "operation": "deactivate_old",
-                    "message": result['error']['message'],
-                    "details": result['error']
+                    "message": result.error['message'],
+                    "details": result.error
                 })
             else:
                 summary['citiesDeactivated'] = len(city_ids_to_deactivate)
@@ -115,4 +119,5 @@ def sync_cities(api_cities_list, db_cities_list, supabase_url, supabase_service_
         logging(f"❌ Error general durante la sincronización: {str(e)}")
         summary['errors'].append({"operation": "general_supabase", "message": str(e)})
         return summary, []
+
 
