@@ -74,8 +74,8 @@ def main():
         print(f"⚠️ Ocurrió un error: {e}")
     
     # Espera de 3 horas antes de volver a ejecutar el ciclo
-    print("🔄 Esperando 3 horas para la próxima ejecución...")
-    time.sleep(3 * 60 * 60)  # Espera de 3 horas (3 horas * 60 minutos * 60 segundos)
+    # print("🔄 Esperando 3 horas para la próxima ejecución...")
+    # time.sleep(3 * 60 * 60)  # Espera de 3 horas (3 horas * 60 minutos * 60 segundos)
 
 if __name__ == "__main__":
         main()
