@@ -28,4 +28,4 @@ jobs:
         echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
     - name: Run script
       run: |
-        python main.py
+        python main.pyno veo 
