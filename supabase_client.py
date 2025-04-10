@@ -11,10 +11,6 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 if not SUPABASE_SERVICE_ROLE_KEY:
     raise ValueError("SUPABASE_SERVICE_ROLE_KEY no está configurada")
 
-# Verificar que la clave empieza con "service_role."
-if not SUPABASE_SERVICE_ROLE_KEY.startswith("service_role."):
-    print("Warning: This key does not appear to be a 'service_role key'. Please check that you are using the correct one.")
-
 def get_existing_cities():
     print("Starting Get Existing Cities from Supabase")
 

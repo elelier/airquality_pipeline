@@ -91,22 +91,21 @@ def update_city(fetch_or_skip_result: dict, supabase_url: str, supabase_service_
     }
 
     # --- Insert en air_quality_readings si aplica ---
+    # Check if reading_data_to_insert is not empty before inserting
     if reading_data_to_insert:
-        try:
-            response = supabase.table('air_quality_readings').insert(reading_data_to_insert).execute()
-            if response.data:
-                result['readingInserted'] = True
-                if logging:
-                    logging(f"Lectura insertada: {response.data}")
-            elif response.error:
-                raise Exception(response.error)
-        except Exception as e:
-            result['insertError'] = str(e)
+        response = supabase.table('air_quality_readings').insert(reading_data_to_insert).execute()
+        if response.data:
+            result['readingInserted'] = True
             if logging:
-                logging(f"Error al insertar lectura: {e}")
+                logging(f"Lectura insertada: {response.data}")
+        elif response.error:
+            result['insertError'] = f"Error al insertar lectura: {response.error}"
+            if logging:
+                logging(f"Error al insertar lectura: {response.error}")
     else:
         if logging:
             logging("No hay datos de lectura para insertar")
+
 
     # --- Update en cities ---
     if city_status_to_update:
