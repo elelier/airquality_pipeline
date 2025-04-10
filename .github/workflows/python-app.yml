@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 name: Python application
 
 on:
@@ -62,4 +61,3 @@ jobs:
     - name: Run script
       run: |
         python main.py
->>>>>>> 81633769b785394d48a62d388e92530bbf4f1afa
