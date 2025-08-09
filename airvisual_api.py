@@ -1,19 +1,15 @@
 import requests
 import time
 import sys
+import logging
 from datetime import datetime
-
-sys.stdout.reconfigure(encoding='utf-8')
-
+from utils import delay
 
 # ──────────────────────────────────────────────────────────────
 # Funciones auxiliares comunes
 # ──────────────────────────────────────────────────────────────
 
-def delay(seconds):
-    time.sleep(seconds)
-
-def fetch_with_retry(url, retries=5, delay_ms=5000, params=None, logging=None):
+def fetch_with_retry(url, retries=5, delay_ms=5000, params=None):
     attempts = 0
     while int(attempts) < int(retries):
         try:
@@ -31,8 +27,7 @@ def fetch_with_retry(url, retries=5, delay_ms=5000, params=None, logging=None):
         except Exception as error:
             if str(error) == 'Too Many Requests' and attempts < retries - 1:
                 exponential_delay = delay_ms * (2 ** attempts)
-                if logging:
-                    logging(f"Rate limit hit, retrying in {exponential_delay / 1000}s... ({attempts + 1}/{retries})")
+                logging.warning(f"Rate limit hit, retrying in {exponential_delay / 1000}s... ({attempts + 1}/{retries})")
                 delay(exponential_delay / 1000)
                 attempts += 1
             else:
@@ -52,25 +47,25 @@ def fetch_cities(AIRVISUAL_API_KEY: str, state: str = "Nuevo Leon", country: str
     }
 
     for attempt in range(1, max_retries + 1):
-        print(f"[Attempt {attempt}] Fetching cities from AirVisual...")
+        logging.info(f"[Attempt {attempt}] Fetching cities from AirVisual...")
 
         try:
             response = requests.get(url, params=params)
             if response.status_code == 200:
                 data = response.json()
                 if data["status"] == "success" and isinstance(data.get("data"), list):
-                    print(f"✔️ Success! Fetched {len(data['data'])} cities.")
+                    logging.info(f"✔️ Success! Fetched {len(data['data'])} cities.")
                     return data["data"]
                 else:
                     raise ValueError(f"Unexpected API format: {data}")
             else:
-                print(f"❌ HTTP Error {response.status_code}: {response.text}")
+                logging.error(f"❌ HTTP Error {response.status_code}: {response.text}")
 
         except Exception as e:
-            print(f"⚠️ Error: {str(e)}")
+            logging.error(f"⚠️ Error: {str(e)}")
 
         if attempt < max_retries:
-            time.sleep(2.5)
+            delay(2.5)
         else:
             raise Exception("❌ Max retries reached. Could not fetch cities.")
 
@@ -78,8 +73,8 @@ def fetch_cities(AIRVISUAL_API_KEY: str, state: str = "Nuevo Leon", country: str
 # Función para obtener la calidad del aire de una ciudad
 # ──────────────────────────────────────────────────────────────
 
-def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY, logging=print):
-    logging(f"--- Iniciando fetchAirQualityData para City ID: {city_id} ({api_name}) ---")
+def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY):
+    logging.info(f"--- Iniciando fetchAirQualityData para City ID: {city_id} ({api_name}) ---")
 
     url = "http://api.airvisual.com/v2/city"
     params = {
@@ -90,7 +85,7 @@ def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY,
     }
 
     try:
-        raw_api_data = fetch_with_retry(url, retries=5, delay_ms=5000, params=params, logging=logging)
+        raw_api_data = fetch_with_retry(url, retries=5, delay_ms=5000, params=params)
 
         location_data = raw_api_data.get('data', {}).get('location', {})
         pollution_data = raw_api_data.get('data', {}).get('current', {}).get('pollution', {})
@@ -129,13 +124,13 @@ def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY,
             'api_raw_response': raw_api_data.get('data', {})
         }
 
-        logging(f"✅ Fetch exitoso para City ID: {city_id}. ")
+        logging.info(f"✅ Fetch exitoso para City ID: {city_id}. ")
     
 
         return success_result
 
     except Exception as error:
-        logging(f"❌ Error al obtener datos para City ID: {city_id} ({api_name}): {error}")
+        logging.error(f"❌ Error al obtener datos para City ID: {city_id} ({api_name}): {error}")
 
         return {
             'city_id': city_id,
