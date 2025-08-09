@@ -3,10 +3,14 @@ from unittest.mock import patch, MagicMock
 import supabase_client
 
 @patch('supabase_client.create_client')
-def test_get_supabase_client(mock_create_client):
+def test_get_supabase_client(mock_create_client, monkeypatch):
     """Test that get_supabase_client calls create_client with the correct credentials."""
+    monkeypatch.setenv('SUPABASE_URL', 'test_url')
+    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', 'test_key')
+
     supabase_client.get_supabase_client()
-    mock_create_client.assert_called_once_with(supabase_client.SUPABASE_URL, supabase_client.SUPABASE_SERVICE_ROLE_KEY)
+
+    mock_create_client.assert_called_once_with('test_url', 'test_key')
 
 @patch('supabase_client.get_supabase_client')
 def test_get_existing_cities_success(mock_get_supabase_client):

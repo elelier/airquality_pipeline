@@ -3,18 +3,20 @@ import os
 import logging
 from supabase import create_client, Client
 
-# Cargar variables de entorno
-load_dotenv()
-
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 def get_supabase_client() -> Client:
     """Crea y devuelve un cliente de Supabase."""
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    # Recargar las variables de entorno en cada llamada para permitir su
+    # configuración durante las pruebas.
+    load_dotenv()
+    supabase_url = os.getenv("SUPABASE_URL")
+    service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+    if not supabase_url or not service_role_key:
         raise ValueError("Supabase URL and Service Role Key are required.")
+
     try:
-        return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        return create_client(supabase_url, service_role_key)
     except Exception as e:
         raise Exception(f"Error creating Supabase client: {str(e)}")
 
