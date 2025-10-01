@@ -133,4 +133,5 @@ El sistema está configurado para ejecutarse automáticamente cada 3 horas a tra
 5. 👀 Esperar revisión y aprobación.
 
 ## 📄 Licencia
-MIT
+
+MIT.
