@@ -133,9 +133,9 @@ def validate_reading_payload(reading: dict) -> dict:
     if lat is None or lon is None:
         reasons.append("missing_coordinates")
     else:
-        if not (25.0 <= lat <= 26.0):
+        if not (25.0 <= lat <= 26.5):
             reasons.append("latitude_out_of_range")
-        if not (-100.0 <= lon <= -99.0):
+        if not (-101.0 <= lon <= -99.0):
             reasons.append("longitude_out_of_range")
 
     return {"valid": len(reasons) == 0, "reasons": reasons}
