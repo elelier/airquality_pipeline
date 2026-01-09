@@ -1,14 +1,41 @@
-# 🌍 Pipeline de Calidad del Aire
+# 🌍 Pipeline de Calidad del Aire - Monterrey Respira
 
 ## 📋 Descripción
-Sistema automatizado para monitorear y actualizar datos de calidad del aire en tiempo real utilizando la API de AirVisual y Supabase como base de datos.
+Sistema automatizado que monitorea la calidad del aire en 10 ciudades del área metropolitana de Monterrey, México. Obtiene datos de la API de IQAir (AirVisual) y los almacena en Supabase para alimentar el dashboard [mtyrespira.elelier.com](https://mtyrespira.elelier.com).
 
 ## 🏗️ Arquitectura
 
-### 📊 Capas Principales
-- **Capa de Datos** 🗄️: Supabase como base de datos principal.
-- **Capa de Servicios** 🌐: AirVisual API para datos de calidad del aire.
-- **Capa de Aplicación** 💻: Lógica de negocio y manejo de datos.
+### 📊 Stack Tecnológico
+- **Frontend**: React + Vite desplegado en Cloudflare Pages
+- **Backend**: Supabase (PostgreSQL) con tablas `cities` y `air_quality_readings`
+- **Pipeline**: Python + GitHub Actions (ejecución cada hora)
+- **API de Datos**: IQAir (AirVisual) v2 API (~10,000 llamadas/mes)
+
+### 🏙️ Ciudades Monitoreadas (10)
+1. Monterrey
+2. San Nicolas de los Garza
+3. San Pedro Garza Garcia
+4. Guadalupe
+5. Santa Catarina
+6. Apodaca
+7. Escobedo
+8. Garcia
+9. Ciudad Benito Juarez
+10. Cadereyta Jimenez
+
+### ⚙️ Estrategia de Actualización
+- **Frecuencia**: Cada hora (cron: `0 * * * *`)
+- **Lógica inteligente**: Solo actualiza ciudades con datos > 59 minutos de antigüedad
+- **Rate limit handling**: 
+  - 3 reintentos automáticos con exponential backoff
+  - Delay entre ciudades: 8-15s con jitter aleatorio
+  - Timeout de 45s por request HTTP
+- **Validación de datos**: 
+  - Rechaza AQI fuera de rango 0-500
+  - Rechaza temperatura < -50°C o > 60°C
+  - Valida coordenadas dentro de Nuevo León (lat 25-26.5, lon -101 a -99)
+
+## 🏗️ Componentes del Sistema
 
 ### 📦 Componentes Principales
 - **airvisual_api.py** 🔗: Interfaz con la API de AirVisual.

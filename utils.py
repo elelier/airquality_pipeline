@@ -5,8 +5,8 @@ import random
 import sys
 
 UPDATE_INTERVAL_MINUTES = 59  # Mantener el valor que decidiste
-MIN_INTER_CITY_DELAY_SECONDS = 5.0
-MAX_INTER_CITY_DELAY_SECONDS = 12.0
+MIN_INTER_CITY_DELAY_SECONDS = 8.0  # Aumentado de 5 a 8
+MAX_INTER_CITY_DELAY_SECONDS = 15.0  # Aumentado de 12 a 15
 
 def setup_logging():
     """Configura el logging para imprimir en la consola."""
