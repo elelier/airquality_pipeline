@@ -57,7 +57,7 @@ def test_compute_inter_city_delay_bounds():
     """Ensure inter-city delay stays within configured bounds."""
     for failures in range(0, 5):
         delay_value = compute_inter_city_delay(failures)
-        assert 5.0 <= delay_value <= 12.0
+        assert 8.0 <= delay_value <= 15.0
 
 
 def test_validate_reading_payload_success():
