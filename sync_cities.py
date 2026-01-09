@@ -60,43 +60,37 @@ def sync_cities(api_cities_list, db_cities_list, deactivate_missing_cities=True)
         # Inserción de nuevas ciudades
         if cities_to_insert:
             logging.info(f"[SYNC] Intentando insertar {len(cities_to_insert)} ciudades nuevas...")
-            result = supabase.table('cities').insert(cities_to_insert).execute()
-
-            # Acceder a error y datos correctamente
-            if result.error:
-                logging.error(f"[ERROR] Error al insertar nuevas ciudades: {result.error['message']}")
-                summary['errors'].append({
-                    "operation": "insert_new",
-                    "message": result.error['message'],
-                    "details": result.error
-                })
-            else:
-                inserted_count = len(result.data)
+            try:
+                result = supabase.table('cities').insert(cities_to_insert).execute()
+                inserted_count = len(result.data) if result.data else 0
                 summary['newCitiesAdded'] = inserted_count
                 logging.info(f"[OK] {inserted_count} ciudades nuevas insertadas exitosamente.")
+            except Exception as insert_error:
+                logging.error(f"[ERROR] Error al insertar nuevas ciudades: {str(insert_error)}")
+                summary['errors'].append({
+                    "operation": "insert_new",
+                    "message": str(insert_error)
+                })
         else:
             logging.info("[OK] No hay ciudades nuevas para insertar.")
 
         # Desactivación de ciudades ausentes
         if city_ids_to_deactivate:
-            logging.info(f"🔄 Intentando desactivar {len(city_ids_to_deactivate)} ciudades...")
+            logging.info(f"[SYNC] Intentando desactivar {len(city_ids_to_deactivate)} ciudades...")
             updates = {
                 "is_active": False,
                 "updated_at": datetime.utcnow().isoformat()
             }
-            result = supabase.table('cities').update(updates).in_('id', city_ids_to_deactivate).execute()
-
-            # Acceder a error y datos correctamente
-            if result.error:
-                logging.error(f"[ERROR] Error al desactivar ciudades ausentes: {result.error['message']}")
-                summary['errors'].append({
-                    "operation": "deactivate_old",
-                    "message": result.error['message'],
-                    "details": result.error
-                })
-            else:
+            try:
+                result = supabase.table('cities').update(updates).in_('id', city_ids_to_deactivate).execute()
                 summary['citiesDeactivated'] = len(city_ids_to_deactivate)
                 logging.info(f"[OK] {summary['citiesDeactivated']} ciudades desactivadas exitosamente.")
+            except Exception as deactivate_error:
+                logging.error(f"[ERROR] Error al desactivar ciudades ausentes: {str(deactivate_error)}")
+                summary['errors'].append({
+                    "operation": "deactivate_old",
+                    "message": str(deactivate_error)
+                })
         elif deactivate_missing_cities:
             logging.info("[OK] No hay ciudades para desactivar.")
 
