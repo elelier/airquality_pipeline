@@ -11,17 +11,18 @@ Sistema automatizado que monitorea la calidad del aire en 10 ciudades del área 
 - **Pipeline**: Python + GitHub Actions (ejecución cada hora)
 - **API de Datos**: IQAir (AirVisual) v2 API (~10,000 llamadas/mes)
 
-### 🏙️ Ciudades Monitoreadas (10)
-1. Monterrey
-2. San Nicolas de los Garza
-3. San Pedro Garza Garcia
-4. Guadalupe
-5. Santa Catarina
-6. Apodaca
-7. Escobedo
-8. Garcia
-9. Ciudad Benito Juarez
-10. Cadereyta Jimenez
+### 🏙️ Ciudades Monitoreadas (9)
+1. Monterrey (ID: 9)
+2. San Nicolas de los Garza (ID: 11)
+3. San Pedro Garza Garcia (ID: 12)
+4. Guadalupe (ID: 7)
+5. Santa Catarina (ID: 13)
+6. General Escobedo (ID: 6)
+7. Garcia (ID: 5)
+8. Ciudad Benito Juárez (ID: 4)
+9. Cadereyta Jimenez (ID: 1)
+
+**Nota**: Apodaca (ID: 2) no tiene estación de monitoreo en AirVisual API.
 
 ### ⚙️ Estrategia de Actualización
 - **Frecuencia**: Cada hora (cron: `0 * * * *`)
@@ -34,6 +35,14 @@ Sistema automatizado que monitorea la calidad del aire en 10 ciudades del área 
   - Rechaza AQI fuera de rango 0-500
   - Rechaza temperatura < -50°C o > 60°C
   - Valida coordenadas dentro de Nuevo León (lat 25-26.5, lon -101 a -99)
+- **Sincronización automática**: Los nombres de ciudades en BD coinciden exactamente con API para evitar desactivaciones
+
+## 📊 Estado del Pipeline (Enero 2026)
+✅ **Todas las 9 ciudades se actualizan exitosamente cada hora**
+- ✅ Integración backend ↔ frontend funcionando
+- ✅ Datos visibles en dashboard en tiempo real
+- ✅ Sin desactivaciones automáticas
+- ✅ Rate limiting manejado correctamente
 
 ## 🏗️ Componentes del Sistema
 
