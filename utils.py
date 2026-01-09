@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta, timezone
 import logging
+import os
+import random
 import sys
 
 UPDATE_INTERVAL_MINUTES = 59  # Mantener el valor que decidiste
+MIN_INTER_CITY_DELAY_SECONDS = 5.0
+MAX_INTER_CITY_DELAY_SECONDS = 12.0
 
 def setup_logging():
     """Configura el logging para imprimir en la consola."""
@@ -77,5 +81,61 @@ def check_if_update_needed(city, force_update=False):
     return result
 
 def delay(seconds: float):
+    """Sleep helper that can be disabled via SKIP_PIPELINE_DELAYS for tests."""
     import time
+
+    if seconds <= 0:
+        return
+
+    skip_sleep = os.getenv("SKIP_PIPELINE_DELAYS", "0").lower() in ("1", "true", "yes")
+    if skip_sleep:
+        logging.debug(f"Skipping delay of {seconds}s due to SKIP_PIPELINE_DELAYS")
+        return
+
     time.sleep(seconds)
+
+
+def compute_inter_city_delay(consecutive_failures: int = 0) -> float:
+    """Compute an inter-city delay between 5-12s with exponential backoff and jitter."""
+    base = MIN_INTER_CITY_DELAY_SECONDS
+    cap = MAX_INTER_CITY_DELAY_SECONDS
+    exponent = max(consecutive_failures - 1, 0)
+    delay_seconds = base * (1.5 ** exponent)
+    jitter = random.uniform(-0.5, 0.5)
+    return max(base, min(cap, delay_seconds + jitter))
+
+
+def validate_reading_payload(reading: dict) -> dict:
+    """Validate pollution/weather payload ranges and coordinates.
+
+    Returns {"valid": bool, "reasons": list[str]}.
+    """
+    reasons = []
+    if not isinstance(reading, dict):
+        return {"valid": False, "reasons": ["reading is not a dict"]}
+
+    aqi_us = reading.get("calidad_aire", {}).get("aqi_us")
+    temperature_c = reading.get("clima", {}).get("temperatura_c")
+    coords = reading.get("coordenadas", {}) or {}
+    lat = coords.get("lat")
+    lon = coords.get("lon")
+
+    if aqi_us is None or not isinstance(aqi_us, (int, float)):
+        reasons.append("missing_or_invalid_aqi_us")
+    elif aqi_us < 0 or aqi_us > 500:
+        reasons.append("aqi_us_out_of_range")
+
+    if temperature_c is None or not isinstance(temperature_c, (int, float)):
+        reasons.append("missing_or_invalid_temperature")
+    elif temperature_c < -50 or temperature_c > 60:
+        reasons.append("temperature_out_of_range")
+
+    if lat is None or lon is None:
+        reasons.append("missing_coordinates")
+    else:
+        if not (25.0 <= lat <= 26.0):
+            reasons.append("latitude_out_of_range")
+        if not (-100.0 <= lon <= -99.0):
+            reasons.append("longitude_out_of_range")
+
+    return {"valid": len(reasons) == 0, "reasons": reasons}

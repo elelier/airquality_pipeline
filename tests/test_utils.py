@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime, timedelta, timezone
-from utils import check_if_update_needed, UPDATE_INTERVAL_MINUTES
+from utils import check_if_update_needed, UPDATE_INTERVAL_MINUTES, compute_inter_city_delay, validate_reading_payload
 
 @pytest.fixture
 def base_city():
@@ -51,3 +51,31 @@ def test_invalid_city_input():
     result = check_if_update_needed(invalid_city)
     assert result['needsUpdate'] == False
     assert result['error'] == True
+
+
+def test_compute_inter_city_delay_bounds():
+    """Ensure inter-city delay stays within configured bounds."""
+    for failures in range(0, 5):
+        delay_value = compute_inter_city_delay(failures)
+        assert 5.0 <= delay_value <= 12.0
+
+
+def test_validate_reading_payload_success():
+    reading = {
+        'calidad_aire': {'aqi_us': 75},
+        'clima': {'temperatura_c': 22},
+        'coordenadas': {'lat': 25.5, 'lon': -99.5}
+    }
+    result = validate_reading_payload(reading)
+    assert result['valid'] is True
+
+
+def test_validate_reading_payload_failure():
+    reading = {
+        'calidad_aire': {'aqi_us': 800},
+        'clima': {'temperatura_c': -80},
+        'coordenadas': {'lat': 24.0, 'lon': -101.0}
+    }
+    result = validate_reading_payload(reading)
+    assert result['valid'] is False
+    assert 'aqi_us_out_of_range' in result['reasons']

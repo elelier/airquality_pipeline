@@ -42,29 +42,29 @@ def sync_cities(api_cities_list, db_cities_list, deactivate_missing_cities=True)
     ]
 
     for c in cities_to_insert:
-        logging.info(f"🆕 Ciudad nueva detectada: {c['api_name']}")
+        logging.info(f"[NEW] Ciudad nueva detectada: {c['api_name']}")
 
     city_ids_to_deactivate = []
     if deactivate_missing_cities:
         for c in db_cities_list:
             if c['is_active'] and c['api_name'] not in api_city_names:
-                logging.info(f"🛑 Ciudad para desactivar detectada: {c['api_name']} (ID: {c['id']})")
+                logging.info(f"[DEACTIVATE] Ciudad para desactivar detectada: {c['api_name']} (ID: {c['id']})")
                 city_ids_to_deactivate.append(c['id'])
     else:
         logging.info("Opción de desactivar ciudades ausentes está deshabilitada.")
 
     try:
         supabase = get_supabase_client()
-        logging.info('✅ Cliente Supabase creado para operaciones de Sync.')
+        logging.info('[OK] Cliente Supabase creado para operaciones de Sync.')
 
         # Inserción de nuevas ciudades
         if cities_to_insert:
-            logging.info(f"🔄 Intentando insertar {len(cities_to_insert)} ciudades nuevas...")
+            logging.info(f"[SYNC] Intentando insertar {len(cities_to_insert)} ciudades nuevas...")
             result = supabase.table('cities').insert(cities_to_insert).execute()
 
             # Acceder a error y datos correctamente
             if result.error:
-                logging.error(f"❌ Error al insertar nuevas ciudades: {result.error['message']}")
+                logging.error(f"[ERROR] Error al insertar nuevas ciudades: {result.error['message']}")
                 summary['errors'].append({
                     "operation": "insert_new",
                     "message": result.error['message'],
@@ -73,9 +73,9 @@ def sync_cities(api_cities_list, db_cities_list, deactivate_missing_cities=True)
             else:
                 inserted_count = len(result.data)
                 summary['newCitiesAdded'] = inserted_count
-                logging.info(f"✅ {inserted_count} ciudades nuevas insertadas exitosamente.")
+                logging.info(f"[OK] {inserted_count} ciudades nuevas insertadas exitosamente.")
         else:
-            logging.info("✅ No hay ciudades nuevas para insertar.")
+            logging.info("[OK] No hay ciudades nuevas para insertar.")
 
         # Desactivación de ciudades ausentes
         if city_ids_to_deactivate:
@@ -88,7 +88,7 @@ def sync_cities(api_cities_list, db_cities_list, deactivate_missing_cities=True)
 
             # Acceder a error y datos correctamente
             if result.error:
-                logging.error(f"❌ Error al desactivar ciudades ausentes: {result.error['message']}")
+                logging.error(f"[ERROR] Error al desactivar ciudades ausentes: {result.error['message']}")
                 summary['errors'].append({
                     "operation": "deactivate_old",
                     "message": result.error['message'],
@@ -96,9 +96,9 @@ def sync_cities(api_cities_list, db_cities_list, deactivate_missing_cities=True)
                 })
             else:
                 summary['citiesDeactivated'] = len(city_ids_to_deactivate)
-                logging.info(f"✅ {summary['citiesDeactivated']} ciudades desactivadas exitosamente.")
+                logging.info(f"[OK] {summary['citiesDeactivated']} ciudades desactivadas exitosamente.")
         elif deactivate_missing_cities:
-            logging.info("✅ No hay ciudades para desactivar.")
+            logging.info("[OK] No hay ciudades para desactivar.")
 
         # Actualizar la lista de ciudades después de la sincronización
         updated_db_cities_list = supabase.table('cities').select('id', 'api_name', 'is_active', 'last_successful_update_at', 'last_update_status').execute().data
@@ -108,7 +108,7 @@ def sync_cities(api_cities_list, db_cities_list, deactivate_missing_cities=True)
         return summary, updated_db_cities_list
 
     except Exception as e:
-        logging.error(f"❌ Error general durante la sincronización: {str(e)}")
+        logging.error(f"[ERROR] Error general durante la sincronizacion: {str(e)}")
         summary['errors'].append({"operation": "general_supabase", "message": str(e)})
         return summary, []
 

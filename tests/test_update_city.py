@@ -2,10 +2,16 @@ import pytest
 from unittest.mock import MagicMock, patch
 from update_city import update_city
 
+@pytest.fixture(autouse=True)
+def disable_delays(monkeypatch):
+    monkeypatch.setenv('SKIP_PIPELINE_DELAYS', '1')
+
+
 @pytest.fixture
 def mock_supabase_client():
-    """Fixture to mock the Supabase client for update_city tests."""
-    with patch('update_city.get_supabase_client') as mock_get_client:
+    """Fixture to mock the Supabase client and logging for update_city tests."""
+    with patch('update_city.get_supabase_client') as mock_get_client, \
+         patch('update_city.log_pipeline_event'):
         mock_client = MagicMock()
         mock_get_client.return_value = mock_client
         yield mock_client
@@ -49,6 +55,18 @@ def test_update_city_fetch_error(mock_supabase_client):
     assert result['updateError'] is None
     mock_supabase_client.table.return_value.insert.assert_not_called()
     mock_supabase_client.table.return_value.update.return_value.eq.assert_called_once_with('id', 2)
+
+
+def test_update_city_validation_failure(mock_supabase_client, success_fetch_result):
+    """Reject out-of-range readings and do not insert."""
+    success_fetch_result['calidad_aire']['aqi_us'] = 999
+
+    result = update_city(success_fetch_result)
+
+    assert result['readingInserted'] is False
+    assert result['cityStatusUpdated'] is True
+    assert result['validationErrors'] is not None
+    mock_supabase_client.table.return_value.insert.assert_not_called()
 
 def test_update_city_skip(mock_supabase_client):
     """Test update_city when the result indicates a skip."""
