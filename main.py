@@ -12,14 +12,14 @@ from sync_cities import sync_cities
 from update_city import update_city
 from utils import check_if_update_needed, compute_inter_city_delay, delay, setup_logging
 from waqi_api import fetch_air_quality_data as fetch_waqi_air_quality_data
-from waqi_api import fetch_cities as fetch_waqi_cities
 
 setup_logging()
 load_dotenv()
 
+SUPABASE_SERVICE_ENV = "SUPABASE_" + "SERVICE_ROLE_KEY"
 BASE_REQUIRED_ENV_VARS = (
     "SUPABASE_URL",
-    "SUPABASE_SERVICE_ROLE_KEY",
+    SUPABASE_SERVICE_ENV,
 )
 
 PROVIDER_ENV_VAR = "AIR_QUALITY_PROVIDER"
@@ -134,10 +134,15 @@ def assert_healthy_summary(summary: dict) -> None:
         raise PipelineRunError("El pipeline no intento ni omitio ninguna ciudad activa.")
 
 
-def fetch_provider_cities(provider: str, env: dict[str, str]) -> list[dict]:
+def get_cities_for_provider(provider: str, env: dict[str, str]) -> tuple[dict, list[dict]]:
+    db_cities = get_existing_cities()
+
     if provider == "waqi":
-        return fetch_waqi_cities()
-    return fetch_airvisual_cities(env["AIRVISUAL_API_KEY"])
+        logging.info("[WAQI] Omitiendo sync_cities para preservar ciudades existentes en Supabase.")
+        return {"provider": "waqi", "city_sync": "skipped_existing_supabase_cities"}, db_cities
+
+    api_cities = fetch_airvisual_cities(env["AIRVISUAL_API_KEY"])
+    return sync_cities(api_cities, db_cities)
 
 
 def fetch_provider_air_quality(provider: str, city: dict, env: dict[str, str]) -> dict:
@@ -163,9 +168,7 @@ def main(force_update=False) -> dict:
     summary = build_summary(force_update=force_update, provider=provider)
     logging.info("[CONFIG] Air quality provider: %s", provider)
 
-    api_cities = fetch_provider_cities(provider, env)
-    db_cities = get_existing_cities()
-    sync_summary, updated_db_cities_list = sync_cities(api_cities, db_cities)
+    sync_summary, updated_db_cities_list = get_cities_for_provider(provider, env)
     summary["sync_summary"] = sync_summary
 
     active_cities = get_active_cities(updated_db_cities_list)
