@@ -5,28 +5,50 @@ import time
 from copy import deepcopy
 from dotenv import load_dotenv
 
-from airvisual_api import fetch_air_quality_data, fetch_cities
+from airvisual_api import fetch_air_quality_data as fetch_airvisual_air_quality_data
+from airvisual_api import fetch_cities as fetch_airvisual_cities
 from supabase_client import get_existing_cities
 from sync_cities import sync_cities
 from update_city import update_city
 from utils import check_if_update_needed, compute_inter_city_delay, delay, setup_logging
+from waqi_api import fetch_air_quality_data as fetch_waqi_air_quality_data
+from waqi_api import fetch_cities as fetch_waqi_cities
 
 setup_logging()
 load_dotenv()
 
-REQUIRED_ENV_VARS = (
+BASE_REQUIRED_ENV_VARS = (
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
-    "AIRVISUAL_API_KEY",
 )
+
+PROVIDER_ENV_VAR = "AIR_QUALITY_PROVIDER"
+DEFAULT_PROVIDER = "waqi"
 
 
 class PipelineRunError(RuntimeError):
     """Raised when the pipeline completed with an unhealthy operational result."""
 
 
-def get_required_env() -> dict[str, str]:
-    missing = [env_name for env_name in REQUIRED_ENV_VARS if not os.getenv(env_name)]
+def get_provider() -> str:
+    provider = os.getenv(PROVIDER_ENV_VAR, DEFAULT_PROVIDER).strip().lower()
+    if provider not in ("waqi", "airvisual"):
+        raise EnvironmentError(
+            f"Proveedor no soportado: {provider}. Usa AIR_QUALITY_PROVIDER=waqi o airvisual."
+        )
+    return provider
+
+
+def get_required_env(provider: str | None = None) -> dict[str, str]:
+    selected_provider = provider or get_provider()
+    required_env_vars = list(BASE_REQUIRED_ENV_VARS)
+
+    if selected_provider == "waqi":
+        required_env_vars.append("WAQI_API_TOKEN")
+    elif selected_provider == "airvisual":
+        required_env_vars.append("AIRVISUAL_API_KEY")
+
+    missing = [env_name for env_name in required_env_vars if not os.getenv(env_name)]
 
     if missing:
         missing_list = ", ".join(missing)
@@ -35,15 +57,16 @@ def get_required_env() -> dict[str, str]:
             f"Configura estos secretos en GitHub Actions: {missing_list}."
         )
 
-    return {env_name: os.environ[env_name] for env_name in REQUIRED_ENV_VARS}
+    return {env_name: os.environ[env_name] for env_name in required_env_vars}
 
 
 def get_active_cities(db_cities_list):
     return [city for city in db_cities_list if city.get("is_active")]
 
 
-def build_summary(force_update: bool) -> dict:
+def build_summary(force_update: bool, provider: str) -> dict:
     return {
+        "provider": provider,
         "force_update": force_update,
         "active_cities": 0,
         "updates_attempted": 0,
@@ -72,6 +95,7 @@ def record_city_result(summary: dict, city: dict, result: dict) -> None:
 def log_pipeline_summary(summary: dict) -> None:
     safe_summary = deepcopy(summary)
     logging.info("\n[SUMMARY] Pipeline operacional")
+    logging.info("Provider: %s", safe_summary["provider"])
     logging.info("Force update: %s", safe_summary["force_update"])
     logging.info("Ciudades activas: %s", safe_summary["active_cities"])
     logging.info("Updates intentados: %s", safe_summary["updates_attempted"])
@@ -110,11 +134,36 @@ def assert_healthy_summary(summary: dict) -> None:
         raise PipelineRunError("El pipeline no intento ni omitio ninguna ciudad activa.")
 
 
-def main(force_update=False) -> dict:
-    env = get_required_env()
-    summary = build_summary(force_update=force_update)
+def fetch_provider_cities(provider: str, env: dict[str, str]) -> list[dict]:
+    if provider == "waqi":
+        return fetch_waqi_cities()
+    return fetch_airvisual_cities(env["AIRVISUAL_API_KEY"])
 
-    api_cities = fetch_cities(env["AIRVISUAL_API_KEY"])
+
+def fetch_provider_air_quality(provider: str, city: dict, env: dict[str, str]) -> dict:
+    if provider == "waqi":
+        return fetch_waqi_air_quality_data(
+            api_name=city["api_name"],
+            city_id=city["id"],
+            waqi_api_token=env["WAQI_API_TOKEN"],
+        )
+
+    return fetch_airvisual_air_quality_data(
+        api_name=city["api_name"],
+        city_id=city["id"],
+        state="Nuevo Leon",
+        country="Mexico",
+        AIRVISUAL_API_KEY=env["AIRVISUAL_API_KEY"],
+    )
+
+
+def main(force_update=False) -> dict:
+    provider = get_provider()
+    env = get_required_env(provider)
+    summary = build_summary(force_update=force_update, provider=provider)
+    logging.info("[CONFIG] Air quality provider: %s", provider)
+
+    api_cities = fetch_provider_cities(provider, env)
     db_cities = get_existing_cities()
     sync_summary, updated_db_cities_list = sync_cities(api_cities, db_cities)
     summary["sync_summary"] = sync_summary
@@ -132,13 +181,7 @@ def main(force_update=False) -> dict:
             logging.info("[UPDATE] Ciudad %s necesita actualizacion.", city["api_name"])
             summary["updates_attempted"] += 1
 
-            fetch_result = fetch_air_quality_data(
-                api_name=city["api_name"],
-                city_id=city["id"],
-                state="Nuevo Leon",
-                country="Mexico",
-                AIRVISUAL_API_KEY=env["AIRVISUAL_API_KEY"],
-            )
+            fetch_result = fetch_provider_air_quality(provider, city, env)
             fetch_result["city_id"] = city["id"]
 
             update_result = update_city(fetch_or_skip_result=fetch_result)
@@ -175,6 +218,7 @@ def main(force_update=False) -> dict:
                 {
                     "needed_update": True,
                     "fetch_status": fetch_result.get("status"),
+                    "fetch_error_type": fetch_result.get("errorType"),
                     "reading_inserted": bool(update_result.get("readingInserted")),
                     "city_status_updated": bool(update_result.get("cityStatusUpdated")),
                     "insert_error": update_result.get("insertError"),
