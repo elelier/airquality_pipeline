@@ -5,34 +5,42 @@ import logging
 from datetime import datetime
 from utils import delay
 
+AIRVISUAL_TIMEOUT_SECONDS = 45
+
 # ──────────────────────────────────────────────────────────────
 # Funciones auxiliares comunes
 # ──────────────────────────────────────────────────────────────
 
-def fetch_with_retry(url, retries=5, delay_ms=5000, params=None):
-    attempts = 0
-    while int(attempts) < int(retries):
+def fetch_with_retry(url, retries=3, delay_ms=5000, params=None, timeout_seconds=AIRVISUAL_TIMEOUT_SECONDS):
+    for attempt in range(1, retries + 1):
         try:
-            response = requests.get(url, params=params)
+            start = time.perf_counter()
+            response = requests.get(url, params=params, timeout=timeout_seconds)
+            elapsed = time.perf_counter() - start
+            logging.info(f"HTTP GET {url} status={response.status_code} elapsed={elapsed:.2f}s")
+
             if not response.ok:
                 error_data = response.json() if response.status_code != 429 else {}
-                if response.status_code == 429 or ('call_limit_reached' in error_data.get('data', {}).get('message', '')):
-                    raise Exception('Too Many Requests')
+                is_rate_limit = response.status_code == 429 or ('call_limit_reached' in error_data.get('data', {}).get('message', ''))
+                if is_rate_limit and attempt < retries:
+                    exponential_delay = (delay_ms / 1000) * (2 ** (attempt - 1))
+                    logging.warning(f"Rate limit hit, retrying in {exponential_delay:.1f}s... ({attempt}/{retries})")
+                    delay(exponential_delay)
+                    continue
                 raise Exception(error_data.get('data', {}).get('message', f"API Error {response.status_code}"))
+
             data = response.json()
             if data['status'] == 'success':
                 return data
-            else:
-                raise Exception(data.get('data', {}).get('message', 'API returned non-success status'))
+
+            raise Exception(data.get('data', {}).get('message', 'API returned non-success status'))
         except Exception as error:
-            if str(error) == 'Too Many Requests' and attempts < retries - 1:
-                exponential_delay = delay_ms * (2 ** attempts)
-                logging.warning(f"Rate limit hit, retrying in {exponential_delay / 1000}s... ({attempts + 1}/{retries})")
-                delay(exponential_delay / 1000)
-                attempts += 1
-            else:
-                raise error
-    raise Exception(f"Failed to fetch {url} after {retries} retries")
+            logging.error(f"Attempt {attempt}/{retries} failed for {url}: {error}")
+            if attempt >= retries:
+                raise Exception(f"Failed to fetch {url} after {retries} retries")
+            # For non-rate-limit errors we still backoff modestly to avoid hammering.
+            backoff_seconds = (delay_ms / 1500) * attempt
+            delay(backoff_seconds)
 
 # ──────────────────────────────────────────────────────────────
 # Función para obtener ciudades
@@ -50,24 +58,27 @@ def fetch_cities(AIRVISUAL_API_KEY: str, state: str = "Nuevo Leon", country: str
         logging.info(f"[Attempt {attempt}] Fetching cities from AirVisual...")
 
         try:
-            response = requests.get(url, params=params)
+            start = time.perf_counter()
+            response = requests.get(url, params=params, timeout=AIRVISUAL_TIMEOUT_SECONDS)
+            elapsed = time.perf_counter() - start
+            logging.info(f"HTTP GET {url} status={response.status_code} elapsed={elapsed:.2f}s")
+
             if response.status_code == 200:
                 data = response.json()
                 if data["status"] == "success" and isinstance(data.get("data"), list):
-                    logging.info(f"✔️ Success! Fetched {len(data['data'])} cities.")
+                    logging.info(f"[OK] Success fetching {len(data['data'])} cities from AirVisual.")
                     return data["data"]
-                else:
-                    raise ValueError(f"Unexpected API format: {data}")
-            else:
-                logging.error(f"❌ HTTP Error {response.status_code}: {response.text}")
+                raise ValueError(f"Unexpected API format: {data}")
+
+            logging.error(f"HTTP Error {response.status_code}: {response.text}")
 
         except Exception as e:
-            logging.error(f"⚠️ Error: {str(e)}")
+            logging.error(f"[ERROR] Error fetching cities (attempt {attempt}/{max_retries}): {str(e)}")
 
         if attempt < max_retries:
             delay(2.5)
         else:
-            raise Exception("❌ Max retries reached. Could not fetch cities.")
+            raise Exception("[ERROR] Max retries reached. Could not fetch cities.")
 
 # ──────────────────────────────────────────────────────────────
 # Función para obtener la calidad del aire de una ciudad
@@ -85,7 +96,7 @@ def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY)
     }
 
     try:
-        raw_api_data = fetch_with_retry(url, retries=5, delay_ms=5000, params=params)
+        raw_api_data = fetch_with_retry(url, retries=3, delay_ms=5000, params=params, timeout_seconds=AIRVISUAL_TIMEOUT_SECONDS)
 
         location_data = raw_api_data.get('data', {}).get('location', {})
         pollution_data = raw_api_data.get('data', {}).get('current', {}).get('pollution', {})
@@ -124,13 +135,13 @@ def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY)
             'api_raw_response': raw_api_data.get('data', {})
         }
 
-        logging.info(f"✅ Fetch exitoso para City ID: {city_id}. ")
+        logging.info(f"[OK] Fetch exitoso para City ID: {city_id}.")
     
 
         return success_result
 
     except Exception as error:
-        logging.error(f"❌ Error al obtener datos para City ID: {city_id} ({api_name}): {error}")
+        logging.error(f"[ERROR] Error al obtener datos para City ID: {city_id} ({api_name}): {error}")
 
         return {
             'city_id': city_id,

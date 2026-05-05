@@ -1,3 +1,4 @@
+from datetime import datetime
 from dotenv import load_dotenv
 import os
 import logging
@@ -38,3 +39,23 @@ def get_existing_cities():
 
     except Exception as e:
         raise Exception(f"Failed to get existing cities from Supabase: {str(e)}")
+
+
+def log_pipeline_event(event: dict):
+    """Insert a pipeline log entry into Supabase (best-effort)."""
+    if not isinstance(event, dict):
+        return
+
+    try:
+        supabase = get_supabase_client()
+        payload = {
+            "city_id": event.get("city_id"),
+            "city_name": event.get("city_name"),
+            "status": event.get("status"),
+            "context": event.get("context"),
+            "details": event.get("details"),
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        supabase.table("pipeline_logs").insert(payload).execute()
+    except Exception as e:
+        logging.warning(f"Could not persist pipeline log: {e}")
