@@ -1,8 +1,18 @@
 name: Air Quality Pipeline
+
 on:
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force city updates regardless of last_successful_update_at'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   build:
@@ -20,10 +30,29 @@ jobs:
       - name: Run tests
         run: pytest
       - name: Configure environment variables
+        env:
+          AIRVISUAL_API_KEY: ${{ secrets.AIRVISUAL_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo AIRVISUAL_API_KEY=${{ secrets.AIRVISUAL_API_KEY }} > .env
-          echo SUPABASE_URL=${{ secrets.SUPABASE_URL }} >> .env
-          echo SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} >> .env
+          echo AIRVISUAL_API_KEY=${AIRVISUAL_API_KEY} > .env
+          echo SUPABASE_URL=${SUPABASE_URL} >> .env
+          echo SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY} >> .env
       - name: Run main.py
+        env:
+          AIRVISUAL_API_KEY: ${{ secrets.AIRVISUAL_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          python main.py --force-update
+          if [ "${{ github.event.inputs.force_update }}" = "true" ]; then
+            python main.py --force-update | tee pipeline.log
+          else
+            python main.py | tee pipeline.log
+          fi
+        shell: bash
+      - name: Upload pipeline log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log
+          path: pipeline.log
