@@ -14,6 +14,14 @@ on:
         options:
           - 'false'
           - 'true'
+      provider:
+        description: 'Air quality provider to use for manual runs'
+        required: false
+        default: 'waqi'
+        type: choice
+        options:
+          - 'waqi'
+          - 'airvisual'
 
 jobs:
   test:
@@ -32,11 +40,14 @@ jobs:
       - name: Run tests
         env:
           SKIP_PIPELINE_DELAYS: '1'
+          AIR_QUALITY_PROVIDER: waqi
         run: pytest
 
   build:
     runs-on: windows-latest
     if: github.event_name != 'pull_request'
+    env:
+      AIR_QUALITY_PROVIDER: ${{ github.event.inputs.provider || 'waqi' }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -50,19 +61,26 @@ jobs:
       - name: Run tests
         env:
           SKIP_PIPELINE_DELAYS: '1'
+          AIR_QUALITY_PROVIDER: waqi
         run: pytest
       - name: Configure environment variables
         env:
           AIRVISUAL_API_KEY: ${{ secrets.AIRVISUAL_API_KEY }}
+          WAQI_API_TOKEN: ${{ secrets.WAQI_API_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AIR_QUALITY_PROVIDER: ${{ env.AIR_QUALITY_PROVIDER }}
         run: |
-          echo AIRVISUAL_API_KEY=${AIRVISUAL_API_KEY} > .env
+          echo AIR_QUALITY_PROVIDER=${AIR_QUALITY_PROVIDER} > .env
+          echo AIRVISUAL_API_KEY=${AIRVISUAL_API_KEY} >> .env
+          echo WAQI_API_TOKEN=${WAQI_API_TOKEN} >> .env
           echo SUPABASE_URL=${SUPABASE_URL} >> .env
           echo SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY} >> .env
       - name: Run main.py
         env:
+          AIR_QUALITY_PROVIDER: ${{ env.AIR_QUALITY_PROVIDER }}
           AIRVISUAL_API_KEY: ${{ secrets.AIRVISUAL_API_KEY }}
+          WAQI_API_TOKEN: ${{ secrets.WAQI_API_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
