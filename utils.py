@@ -96,7 +96,7 @@ def delay(seconds: float):
 
 
 def compute_inter_city_delay(consecutive_failures: int = 0) -> float:
-    """Compute an inter-city delay between 5-12s with exponential backoff and jitter."""
+    """Compute an inter-city delay between 8-15s with exponential backoff and jitter."""
     base = MIN_INTER_CITY_DELAY_SECONDS
     cap = MAX_INTER_CITY_DELAY_SECONDS
     exponent = max(consecutive_failures - 1, 0)
