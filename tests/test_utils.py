@@ -70,6 +70,31 @@ def test_validate_reading_payload_success():
     assert result['valid'] is True
 
 
+def test_validate_reading_payload_allows_missing_weather_fields():
+    reading = {
+        'calidad_aire': {'aqi_us': 75},
+        'clima': {
+            'temperatura_c': None,
+            'humedad_relativa': None,
+            'velocidad_viento_ms': None,
+        },
+        'coordenadas': {'lat': 25.5, 'lon': -99.5}
+    }
+    result = validate_reading_payload(reading)
+    assert result['valid'] is True
+
+
+def test_validate_reading_payload_rejects_invalid_temperature_when_present():
+    reading = {
+        'calidad_aire': {'aqi_us': 75},
+        'clima': {'temperatura_c': 'unknown'},
+        'coordenadas': {'lat': 25.5, 'lon': -99.5}
+    }
+    result = validate_reading_payload(reading)
+    assert result['valid'] is False
+    assert 'invalid_temperature' in result['reasons']
+
+
 def test_validate_reading_payload_failure():
     reading = {
         'calidad_aire': {'aqi_us': 800},
