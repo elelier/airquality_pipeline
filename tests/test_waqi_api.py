@@ -21,6 +21,49 @@ SUCCESS_WAQI_PAYLOAD = {
 }
 
 
+def test_expected_active_api_names_are_covered_by_mapping_registry():
+    assert waqi_api.EXPECTED_ACTIVE_API_NAMES == (
+        "Monterrey",
+        "San Nicolas de los Garza",
+        "Guadalupe",
+        "San Pedro Garza Garcia",
+        "Santa Catarina",
+        "General Escobedo",
+        "Garcia",
+        "Ciudad Benito Juarez",
+        "Cadereyta Jimenez",
+    )
+
+    missing_registry_entries = [
+        api_name
+        for api_name in waqi_api.EXPECTED_ACTIVE_API_NAMES
+        if api_name not in waqi_api.WAQI_STATION_BY_API_NAME
+    ]
+
+    assert missing_registry_entries == []
+
+
+def test_station_mapping_snapshot_marks_verified_and_pending_cities():
+    snapshot = waqi_api.get_station_mapping_snapshot()
+
+    assert len(snapshot) == len(waqi_api.EXPECTED_ACTIVE_API_NAMES)
+    by_api_name = {row["api_name"]: row for row in snapshot}
+
+    assert by_api_name["San Nicolas de los Garza"] == {
+        "api_name": "San Nicolas de los Garza",
+        "provider": "waqi",
+        "station_id": "6493",
+        "verified": True,
+        "evidence": "Initial verified WAQI mapping from PR #3: @6493.",
+    }
+    assert by_api_name["Guadalupe"]["station_id"] == "6494"
+    assert by_api_name["San Pedro Garza Garcia"]["station_id"] == "8282"
+    assert by_api_name["Monterrey"]["station_id"] is None
+    assert by_api_name["Monterrey"]["verified"] is False
+    assert by_api_name["Cadereyta Jimenez"]["station_id"] is None
+    assert by_api_name["Cadereyta Jimenez"]["verified"] is False
+
+
 def test_normalize_waqi_payload_success():
     result = waqi_api.normalize_waqi_payload(
         raw_api_data=SUCCESS_WAQI_PAYLOAD,
@@ -54,6 +97,7 @@ def test_fetch_air_quality_data_missing_token_fails_closed():
 
     assert result["status"] == "error"
     assert result["errorType"] == "missing_token"
+    assert result["provider_station_id"] is None
 
 
 def test_fetch_air_quality_data_unmapped_station_fails_closed():
@@ -65,6 +109,7 @@ def test_fetch_air_quality_data_unmapped_station_fails_closed():
 
     assert result["status"] == "error"
     assert result["errorType"] == "station_not_mapped"
+    assert result["provider_station_id"] is None
 
 
 def test_normalize_waqi_payload_status_not_ok():
@@ -138,6 +183,28 @@ def test_normalize_waqi_payload_missing_coordinates():
 
     assert result["status"] == "error"
     assert result["errorType"] == "missing_coordinates"
+
+
+def test_normalize_waqi_payload_rejects_coordinates_outside_nuevo_leon():
+    payload = {
+        "status": "ok",
+        "data": {
+            "aqi": 87,
+            "time": {"iso": "2026-05-05T12:00:00-06:00"},
+            "city": {"geo": [19.4326, -99.1332]},
+            "iaqi": {"t": {"v": 28}},
+        },
+    }
+
+    result = waqi_api.normalize_waqi_payload(
+        raw_api_data=payload,
+        api_name="San Nicolas de los Garza",
+        city_id=11,
+        station_id="6493",
+    )
+
+    assert result["status"] == "error"
+    assert result["errorType"] == "coordinates_out_of_nuevo_leon"
 
 
 def test_fetch_air_quality_data_success_does_not_log_token():
