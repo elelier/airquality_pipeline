@@ -20,21 +20,21 @@ El pipeline conserva las ciudades existentes en Supabase y usa `city_id` como id
 
 | Ciudad activa | Estado WAQI | Estación | Evidencia |
 | --- | --- | --- | --- |
-| Monterrey | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
+| Monterrey | Verificada por página pública AQICN + validación runtime | `@6492` | Obispado, Nuevo León / Cloud API H6492. |
 | San Nicolas de los Garza | Verificada | `@6493` | Mapping inicial validado en PR #3. |
 | Guadalupe | Verificada | `@6494` | Mapping inicial validado en PR #3. |
 | San Pedro Garza Garcia | Verificada | `@8282` | Mapping inicial validado en PR #3. |
-| Santa Catarina | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
-| General Escobedo | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
-| Garcia | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
-| Ciudad Benito Juarez | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
-| Cadereyta Jimenez | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
+| Santa Catarina | Verificada por página pública AQICN + validación runtime | `@6491` | S. Catarina, Nuevo León / Cloud API H6491. |
+| General Escobedo | Verificada por página pública AQICN + validación runtime | `@6496` | Escobedo, Nuevo León / Cloud API H6496. |
+| Garcia | Verificada por página pública AQICN + validación runtime | `@6495` | Garcia, Nuevo León / Cloud API H6495. |
+| Ciudad Benito Juarez | Verificada por página pública AQICN + validación runtime | `@8113` | Juarez, Nuevo León / Cloud API H8113. |
+| Cadereyta Jimenez | Verificada por página pública AQICN + validación runtime | `@10950` | Cadereyta, Monterrey, Nuevo León / Cloud API H10950. |
 
-Las ciudades pendientes fallan cerrado con `error: station_not_mapped` hasta verificar estación. No se deben adivinar estaciones silenciosamente.
+Las estaciones quedan sujetas a validación runtime antes de insertar: `status=ok`, AQI, timestamp y coordenadas dentro de Nuevo León. Si WAQI devuelve payload inválido o fuera de rango, el pipeline falla cerrado y no inserta lectura.
 
-#### Criterio para habilitar nueva estación WAQI
+#### Criterio para habilitar o cambiar una estación WAQI
 
-Antes de reemplazar `None` por un `station_id` en `waqi_api.py`, validar en un run manual/runtime:
+Antes de reemplazar cualquier `station_id` en `waqi_api.py`, validar en un run manual/runtime:
 
 - WAQI feed real responde `status=ok`.
 - Payload contiene AQI válido.
@@ -42,7 +42,7 @@ Antes de reemplazar `None` por un `station_id` en `waqi_api.py`, validar en un r
 - Payload contiene coordenadas dentro de Nuevo León: lat `25.0..26.5`, lon `-101.0..-99.0`.
 - La estación corresponde razonablemente al municipio y no solo a una ciudad cercana.
 
-Si cualquier punto queda dudoso, mantener `None` + TODO explícito.
+Si cualquier punto queda dudoso, mantener o regresar el mapping a `None` + TODO explícito.
 
 ### ⚙️ Estrategia de Actualización
 - **Frecuencia**: Cada hora (cron: `0 * * * *`)
@@ -62,7 +62,7 @@ Si cualquier punto queda dudoso, mantener `None` + TODO explícito.
 - IQAir/AirVisual dejó de ser proveedor activo porque el endpoint `/v2/cities` responde HTTP 402 Payment Required.
 - WAQI/AQICN es el proveedor activo para estaciones verificadas.
 - La cobertura esperada de ciudades activas vive en `waqi_api.EXPECTED_ACTIVE_API_NAMES`.
-- Las ciudades sin estación WAQI verificada quedan visibles como `error: station_not_mapped`.
+- Las estaciones se trazan en logs por `provider_station_id` sin exponer tokens.
 - Supabase y la RPC `get_latest_air_quality_per_city` se mantienen sin cambios.
 
 ## 🏗️ Componentes del Sistema
@@ -165,7 +165,7 @@ El sistema está configurado para ejecutarse automáticamente cada hora a travé
 - WAQI/AQICN como provider activo.
 - AirVisual como fallback explícito.
 - Selección vía `AIR_QUALITY_PROVIDER`.
-- Fail-closed para ciudades sin mapping.
+- Fail-closed para ciudades sin mapping o payload no confiable.
 
 ### ⚡ Manejo de Actualizaciones
 - Intervalo de actualización: 59 minutos.
