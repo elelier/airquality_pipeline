@@ -16,24 +16,33 @@ Sistema automatizado que monitorea la calidad del aire en ciudades del área met
 
 El pipeline conserva las ciudades existentes en Supabase y usa `city_id` como identidad estable. Con WAQI, la cobertura productiva depende de un mapeo explícito ciudad → estación.
 
-#### Estaciones WAQI verificadas inicialmente
+#### Cobertura WAQI esperada para ciudades activas
 
-1. San Nicolas de los Garza (ID: 11) → WAQI station `@6493`
-2. Guadalupe (ID: 7) → WAQI station `@6494`
-3. San Pedro Garza Garcia (ID: 12) → WAQI station `@8282`
+| Ciudad activa | Estado WAQI | Estación | Evidencia |
+| --- | --- | --- | --- |
+| Monterrey | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
+| San Nicolas de los Garza | Verificada | `@6493` | Mapping inicial validado en PR #3. |
+| Guadalupe | Verificada | `@6494` | Mapping inicial validado en PR #3. |
+| San Pedro Garza Garcia | Verificada | `@8282` | Mapping inicial validado en PR #3. |
+| Santa Catarina | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
+| General Escobedo | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
+| Garcia | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
+| Ciudad Benito Juarez | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
+| Cadereyta Jimenez | Pendiente | `None` | Requiere verificación manual con `WAQI_API_TOKEN`. |
 
-#### Ciudades pendientes de mapeo WAQI
+Las ciudades pendientes fallan cerrado con `error: station_not_mapped` hasta verificar estación. No se deben adivinar estaciones silenciosamente.
 
-Estas ciudades fallan cerrado con `error: station_not_mapped` hasta verificar estación:
+#### Criterio para habilitar nueva estación WAQI
 
-- Monterrey (ID: 9)
-- Santa Catarina (ID: 13)
-- General Escobedo (ID: 6)
-- Garcia (ID: 5)
-- Ciudad Benito Juárez (ID: 4)
-- Cadereyta Jimenez (ID: 1)
+Antes de reemplazar `None` por un `station_id` en `waqi_api.py`, validar en un run manual/runtime:
 
-No se deben adivinar estaciones silenciosamente.
+- WAQI feed real responde `status=ok`.
+- Payload contiene AQI válido.
+- Payload contiene timestamp válido.
+- Payload contiene coordenadas dentro de Nuevo León: lat `25.0..26.5`, lon `-101.0..-99.0`.
+- La estación corresponde razonablemente al municipio y no solo a una ciudad cercana.
+
+Si cualquier punto queda dudoso, mantener `None` + TODO explícito.
 
 ### ⚙️ Estrategia de Actualización
 - **Frecuencia**: Cada hora (cron: `0 * * * *`)
@@ -52,13 +61,14 @@ No se deben adivinar estaciones silenciosamente.
 
 - IQAir/AirVisual dejó de ser proveedor activo porque el endpoint `/v2/cities` responde HTTP 402 Payment Required.
 - WAQI/AQICN es el proveedor activo para estaciones verificadas.
+- La cobertura esperada de ciudades activas vive en `waqi_api.EXPECTED_ACTIVE_API_NAMES`.
 - Las ciudades sin estación WAQI verificada quedan visibles como `error: station_not_mapped`.
 - Supabase y la RPC `get_latest_air_quality_per_city` se mantienen sin cambios.
 
 ## 🏗️ Componentes del Sistema
 
 ### 📦 Componentes Principales
-- **waqi_api.py** 🔗: Adapter activo para WAQI/AQICN.
+- **waqi_api.py** 🔗: Adapter activo para WAQI/AQICN y registry fail-closed de estaciones.
 - **airvisual_api.py** 🧭: Adapter legacy/fallback para IQAir/AirVisual.
 - **supabase_client.py** 🗄️: Manejo de la base de datos.
 - **sync_cities.py** 🔄: Sincronización de datos de ciudades. En WAQI no desactiva ciudades por lista upstream.
