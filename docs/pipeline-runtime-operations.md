@@ -44,15 +44,35 @@ For AirVisual fallback runs:
 
 ## WAQI station mapping
 
-Verified initial mappings:
+The expected active municipality coverage is defined in `waqi_api.EXPECTED_ACTIVE_API_NAMES` and guarded by tests. WAQI sync does not deactivate cities.
 
-- `San Nicolas de los Garza` -> `@6493`
-- `Guadalupe` -> `@6494`
-- `San Pedro Garza Garcia` -> `@8282`
+| API name | Runtime status | WAQI station | Action |
+| --- | --- | --- | --- |
+| `Monterrey` | pending | `None` | Verify feed before enabling. |
+| `San Nicolas de los Garza` | verified | `@6493` | Keep enabled. |
+| `Guadalupe` | verified | `@6494` | Keep enabled. |
+| `San Pedro Garza Garcia` | verified | `@8282` | Keep enabled. |
+| `Santa Catarina` | pending | `None` | Verify feed before enabling. |
+| `General Escobedo` | pending | `None` | Verify feed before enabling. |
+| `Garcia` | pending | `None` | Verify feed before enabling. |
+| `Ciudad Benito Juarez` | pending | `None` | Verify feed before enabling. |
+| `Cadereyta Jimenez` | pending | `None` | Verify feed before enabling. |
 
 Unverified cities fail closed with `error: station_not_mapped` until mapped explicitly.
 
 Do not guess stations silently.
+
+## Station verification criteria
+
+Before enabling a station in `waqi_api.WAQI_STATION_BY_API_NAME`, verify with a real manual/runtime WAQI feed request using `WAQI_API_TOKEN`:
+
+- `status=ok`
+- AQI exists and is numeric
+- timestamp exists and parses
+- coordinates exist and are inside Nuevo León: lat `25.0..26.5`, lon `-101.0..-99.0`
+- station is reasonable for the target municipality, not only a nearby city fallback
+
+If any criterion is uncertain, keep the mapping as `None` and leave the city visible as `error: station_not_mapped`.
 
 ## Manual recovery
 
@@ -73,9 +93,11 @@ A run is healthy when:
 A run is unhealthy when:
 
 - there are no active cities,
-- any city update fails,
+- any fatal city update fails,
 - updates were attempted but zero readings were inserted, or
 - no active city was updated or skipped.
+
+`station_not_mapped` is non-fatal only when at least one mapped city inserts a reading or all healthy mapped cities are up-to-date.
 
 ## Summary block
 
@@ -86,12 +108,15 @@ A run is unhealthy when:
 - updates attempted
 - readings inserted
 - skipped cities
+- skipped unmapped cities
 - failed updates
 - fetch errors
 - validation failures
 - insert errors
 - update errors
 - per-city results
+
+For WAQI, each fetch also logs the mapped station as `@station_id` or `unmapped`. Tokens must never be logged.
 
 ## Common stale-data causes
 
@@ -100,6 +125,7 @@ A run is unhealthy when:
 - WAQI token is invalid or missing.
 - A city has no verified WAQI station mapping.
 - WAQI payload is missing AQI, timestamp, coordinates, or required weather fields.
+- WAQI station coordinates are outside Nuevo León.
 - Supabase insert or update failed.
 
 ## Post-run checks
