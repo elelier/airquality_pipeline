@@ -7,11 +7,29 @@ import requests
 WAQI_BASE_URL = "https://api.waqi.info/feed"
 WAQI_TIMEOUT_SECONDS = 45
 
+NUEVO_LEON_LAT_RANGE = (25.0, 26.5)
+NUEVO_LEON_LON_RANGE = (-101.0, -99.0)
+
+EXPECTED_ACTIVE_API_NAMES = (
+    "Monterrey",
+    "San Nicolas de los Garza",
+    "Guadalupe",
+    "San Pedro Garza Garcia",
+    "Santa Catarina",
+    "General Escobedo",
+    "Garcia",
+    "Ciudad Benito Juarez",
+    "Cadereyta Jimenez",
+)
+
+# Mapping is intentionally explicit and fail-closed. Add station ids only after a
+# manual WAQI feed check with WAQI_API_TOKEN validates status=ok, AQI,
+# timestamp, and coordinates inside Nuevo Leon.
 WAQI_STATION_BY_API_NAME = {
     "San Nicolas de los Garza": "6493",
     "Guadalupe": "6494",
     "San Pedro Garza Garcia": "8282",
-    # TODO: verify station mapping before enabling these cities.
+    # TODO(waqi-coverage): verify station mapping before enabling these cities.
     "Monterrey": None,
     "Santa Catarina": None,
     "General Escobedo": None,
@@ -19,6 +37,12 @@ WAQI_STATION_BY_API_NAME = {
     "Ciudad Benito Juarez": None,
     "Ciudad Benito Juárez": None,
     "Cadereyta Jimenez": None,
+}
+
+WAQI_STATION_EVIDENCE = {
+    "San Nicolas de los Garza": "Initial verified WAQI mapping from PR #3: @6493.",
+    "Guadalupe": "Initial verified WAQI mapping from PR #3: @6494.",
+    "San Pedro Garza Garcia": "Initial verified WAQI mapping from PR #3: @8282.",
 }
 
 POLLUTANT_MAP = {
@@ -42,6 +66,24 @@ def fetch_cities() -> list[dict[str, Any]]:
     return []
 
 
+def get_station_mapping_snapshot() -> list[dict[str, Any]]:
+    """Return mapping coverage for expected active municipalities.
+
+    This helper is testable without network access and keeps docs/tests aligned
+    with the fail-closed coverage registry.
+    """
+    return [
+        {
+            "api_name": api_name,
+            "provider": "waqi",
+            "station_id": WAQI_STATION_BY_API_NAME.get(api_name),
+            "verified": bool(WAQI_STATION_BY_API_NAME.get(api_name)),
+            "evidence": WAQI_STATION_EVIDENCE.get(api_name),
+        }
+        for api_name in EXPECTED_ACTIVE_API_NAMES
+    ]
+
+
 def fetch_air_quality_data(api_name: str, city_id: int, waqi_api_token: str | None) -> dict[str, Any]:
     logging.info("--- Iniciando fetch WAQI para City ID: %s (%s) ---", city_id, api_name)
 
@@ -49,6 +91,13 @@ def fetch_air_quality_data(api_name: str, city_id: int, waqi_api_token: str | No
         return build_error_result(city_id, api_name, "missing_token", "WAQI_API_TOKEN no configurado.")
 
     station_id = WAQI_STATION_BY_API_NAME.get(api_name)
+    logging.info(
+        "[WAQI] Mapping city_id=%s api_name=%s station=%s",
+        city_id,
+        api_name,
+        f"@{station_id}" if station_id else "unmapped",
+    )
+
     if not station_id:
         return build_error_result(
             city_id,
@@ -112,6 +161,14 @@ def normalize_waqi_payload(
             "WAQI payload sin coordenadas validas.",
         )
 
+    if not is_coordinate_in_nuevo_leon(coordinates[0], coordinates[1]):
+        return build_error_result(
+            city_id,
+            api_name,
+            "coordinates_out_of_nuevo_leon",
+            f"WAQI station @{station_id} fuera de rango NL: {coordinates}.",
+        )
+
     iaqi = data.get("iaqi") if isinstance(data.get("iaqi"), dict) else {}
     dominant_pollutant = normalize_pollutant(data.get("dominentpol"))
 
@@ -154,6 +211,7 @@ def build_error_result(city_id: int, api_name: str, error_type: str, message: st
         "municipio": api_name,
         "api_name_used": api_name,
         "provider": "waqi",
+        "provider_station_id": None,
         "errorType": error_type,
         "message": message,
     }
@@ -235,3 +293,9 @@ def extract_coordinates(data: dict[str, Any]) -> tuple[float, float] | None:
         return None
 
     return float(lat), float(lon)
+
+
+def is_coordinate_in_nuevo_leon(lat: float, lon: float) -> bool:
+    return NUEVO_LEON_LAT_RANGE[0] <= lat <= NUEVO_LEON_LAT_RANGE[1] and (
+        NUEVO_LEON_LON_RANGE[0] <= lon <= NUEVO_LEON_LON_RANGE[1]
+    )
