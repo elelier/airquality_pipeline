@@ -24,6 +24,7 @@ BASE_REQUIRED_ENV_VARS = (
 
 PROVIDER_ENV_VAR = "AIR_QUALITY_PROVIDER"
 DEFAULT_PROVIDER = "waqi"
+NON_FATAL_FETCH_ERROR_TYPES = {"station_not_mapped"}
 
 
 class PipelineRunError(RuntimeError):
@@ -72,6 +73,7 @@ def build_summary(force_update: bool, provider: str) -> dict:
         "updates_attempted": 0,
         "readings_inserted": 0,
         "skipped_up_to_date": 0,
+        "skipped_unmapped": 0,
         "failed_updates": 0,
         "fetch_errors": 0,
         "validation_failures": 0,
@@ -101,6 +103,7 @@ def log_pipeline_summary(summary: dict) -> None:
     logging.info("Updates intentados: %s", safe_summary["updates_attempted"])
     logging.info("Lecturas insertadas: %s", safe_summary["readings_inserted"])
     logging.info("Ciudades sin actualizar por intervalo: %s", safe_summary["skipped_up_to_date"])
+    logging.info("Ciudades sin mapping WAQI: %s", safe_summary["skipped_unmapped"])
     logging.info("Updates fallidos: %s", safe_summary["failed_updates"])
     logging.info("Errores de fetch: %s", safe_summary["fetch_errors"])
     logging.info("Fallos de validacion: %s", safe_summary["validation_failures"])
@@ -118,16 +121,16 @@ def assert_healthy_summary(summary: dict) -> None:
     if summary["active_cities"] == 0:
         raise PipelineRunError("No hay ciudades activas para actualizar.")
 
-    if summary["failed_updates"] > 0:
-        raise PipelineRunError(
-            "El pipeline tuvo updates fallidos. "
-            f"failed_updates={summary['failed_updates']}, "
-            f"readings_inserted={summary['readings_inserted']}."
-        )
-
     if summary["updates_attempted"] > 0 and summary["readings_inserted"] == 0:
         raise PipelineRunError(
             "El pipeline intento actualizar ciudades pero no inserto ninguna lectura."
+        )
+
+    if summary["failed_updates"] > 0:
+        raise PipelineRunError(
+            "El pipeline tuvo updates fallidos fatales. "
+            f"failed_updates={summary['failed_updates']}, "
+            f"readings_inserted={summary['readings_inserted']}."
         )
 
     if summary["updates_attempted"] == 0 and summary["skipped_up_to_date"] == 0:
@@ -201,10 +204,22 @@ def main(force_update=False) -> dict:
                 summary["readings_inserted"] += 1
                 logging.info("[OK] Update realizado para %s: %s", city["api_name"], update_result)
             else:
-                consecutive_failures += 1
-                summary["failed_updates"] += 1
+                error_type = fetch_result.get("errorType")
+                non_fatal_fetch_error = error_type in NON_FATAL_FETCH_ERROR_TYPES
 
-                if fetch_result.get("status") == "error":
+                if non_fatal_fetch_error:
+                    summary["skipped_unmapped"] += 1
+                    consecutive_failures = 0
+                    logging.warning(
+                        "[NEEDS_MAPPING] Ciudad %s sin mapping verificado: %s",
+                        city["api_name"],
+                        update_result,
+                    )
+                else:
+                    consecutive_failures += 1
+                    summary["failed_updates"] += 1
+
+                if fetch_result.get("status") == "error" and not non_fatal_fetch_error:
                     summary["fetch_errors"] += 1
                 if update_result.get("validationErrors"):
                     summary["validation_failures"] += 1
@@ -213,7 +228,8 @@ def main(force_update=False) -> dict:
                 if update_result.get("updateError"):
                     summary["update_errors"] += 1
 
-                logging.warning("[WARN] Update con alertas para %s: %s", city["api_name"], update_result)
+                if not non_fatal_fetch_error:
+                    logging.warning("[WARN] Update con alertas para %s: %s", city["api_name"], update_result)
 
             record_city_result(
                 summary,
