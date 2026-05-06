@@ -22,27 +22,32 @@ EXPECTED_ACTIVE_API_NAMES = (
     "Cadereyta Jimenez",
 )
 
-# Mapping is intentionally explicit and fail-closed. Add station ids only after a
-# manual WAQI feed check with WAQI_API_TOKEN validates status=ok, AQI,
-# timestamp, and coordinates inside Nuevo Leon.
+# Mapping is intentionally explicit and fail-closed. Station ids come from
+# public AQICN station pages and runtime still validates status=ok, AQI,
+# timestamp, and coordinates inside Nuevo Leon before inserting readings.
 WAQI_STATION_BY_API_NAME = {
+    "Monterrey": "6492",
     "San Nicolas de los Garza": "6493",
     "Guadalupe": "6494",
     "San Pedro Garza Garcia": "8282",
-    # TODO(waqi-coverage): verify station mapping before enabling these cities.
-    "Monterrey": None,
-    "Santa Catarina": None,
-    "General Escobedo": None,
-    "Garcia": None,
-    "Ciudad Benito Juarez": None,
-    "Ciudad Benito Juárez": None,
-    "Cadereyta Jimenez": None,
+    "Santa Catarina": "6491",
+    "General Escobedo": "6496",
+    "Garcia": "6495",
+    "Ciudad Benito Juarez": "8113",
+    "Ciudad Benito Juárez": "8113",
+    "Cadereyta Jimenez": "10950",
 }
 
 WAQI_STATION_EVIDENCE = {
+    "Monterrey": "AQICN public station page for Obispado, Nuevo Leon lists Cloud API H6492.",
     "San Nicolas de los Garza": "Initial verified WAQI mapping from PR #3: @6493.",
     "Guadalupe": "Initial verified WAQI mapping from PR #3: @6494.",
     "San Pedro Garza Garcia": "Initial verified WAQI mapping from PR #3: @8282.",
+    "Santa Catarina": "AQICN public station page for S. Catarina, Nuevo Leon lists Cloud API H6491.",
+    "General Escobedo": "AQICN public station page for Escobedo, Nuevo Leon lists Cloud API H6496.",
+    "Garcia": "AQICN public station page for Garcia, Nuevo Leon lists Cloud API H6495.",
+    "Ciudad Benito Juarez": "AQICN public station page for Juarez, Nuevo Leon lists Cloud API H8113.",
+    "Cadereyta Jimenez": "AQICN public station page for Cadereyta, Monterrey, Nuevo Leon lists Cloud API H10950.",
 }
 
 POLLUTANT_MAP = {
@@ -121,7 +126,7 @@ def fetch_air_quality_data(api_name: str, city_id: int, waqi_api_token: str | No
         )
     except Exception as error:
         logging.error("[WAQI] Error al obtener datos para City ID %s (%s): %s", city_id, api_name, error)
-        return build_error_result(city_id, api_name, "fetch_failed", str(error))
+        return build_error_result(city_id, api_name, "fetch_failed", str(error), station_id)
 
 
 def normalize_waqi_payload(
@@ -133,15 +138,15 @@ def normalize_waqi_payload(
     status = raw_api_data.get("status")
     if status != "ok":
         message = str(raw_api_data.get("data") or raw_api_data.get("message") or "WAQI status != ok")
-        return build_error_result(city_id, api_name, "waqi_status_not_ok", message)
+        return build_error_result(city_id, api_name, "waqi_status_not_ok", message, station_id)
 
     data = raw_api_data.get("data")
     if not isinstance(data, dict):
-        return build_error_result(city_id, api_name, "invalid_payload", "WAQI data no es objeto.")
+        return build_error_result(city_id, api_name, "invalid_payload", "WAQI data no es objeto.", station_id)
 
     aqi = parse_number(data.get("aqi"))
     if aqi is None:
-        return build_error_result(city_id, api_name, "missing_aqi", "WAQI payload sin AQI valido.")
+        return build_error_result(city_id, api_name, "missing_aqi", "WAQI payload sin AQI valido.", station_id)
 
     timestamp = extract_timestamp(data)
     if not timestamp:
@@ -150,6 +155,7 @@ def normalize_waqi_payload(
             api_name,
             "missing_reading_ts",
             "WAQI payload sin timestamp valido.",
+            station_id,
         )
 
     coordinates = extract_coordinates(data)
@@ -159,6 +165,7 @@ def normalize_waqi_payload(
             api_name,
             "missing_coordinates",
             "WAQI payload sin coordenadas validas.",
+            station_id,
         )
 
     if not is_coordinate_in_nuevo_leon(coordinates[0], coordinates[1]):
@@ -167,6 +174,7 @@ def normalize_waqi_payload(
             api_name,
             "coordinates_out_of_nuevo_leon",
             f"WAQI station @{station_id} fuera de rango NL: {coordinates}.",
+            station_id,
         )
 
     iaqi = data.get("iaqi") if isinstance(data.get("iaqi"), dict) else {}
@@ -203,7 +211,13 @@ def normalize_waqi_payload(
     }
 
 
-def build_error_result(city_id: int, api_name: str, error_type: str, message: str) -> dict[str, Any]:
+def build_error_result(
+    city_id: int,
+    api_name: str,
+    error_type: str,
+    message: str,
+    station_id: str | None = None,
+) -> dict[str, Any]:
     logging.warning("[WAQI] %s para City ID %s (%s): %s", error_type, city_id, api_name, message)
     return {
         "city_id": city_id,
@@ -211,7 +225,7 @@ def build_error_result(city_id: int, api_name: str, error_type: str, message: st
         "municipio": api_name,
         "api_name_used": api_name,
         "provider": "waqi",
-        "provider_station_id": None,
+        "provider_station_id": station_id,
         "errorType": error_type,
         "message": message,
     }
