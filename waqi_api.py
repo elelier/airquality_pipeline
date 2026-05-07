@@ -33,9 +33,14 @@ WAQI_STATION_BY_API_NAME = {
     "Santa Catarina": "6491",
     "General Escobedo": "6496",
     "Garcia": "6495",
+    "García": "6495",
     "Ciudad Benito Juarez": "8113",
     "Ciudad Benito Juárez": "8113",
+    "Benito Juarez": "8113",
+    "Benito Juárez": "8113",
     "Cadereyta Jimenez": "10950",
+    "Cadereyta Jiménez": "10950",
+    "Cadereyta": "10950",
 }
 
 WAQI_STATION_EVIDENCE = {

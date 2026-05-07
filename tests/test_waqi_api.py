@@ -32,6 +32,15 @@ EXPECTED_STATION_IDS = {
     "Cadereyta Jimenez": "10950",
 }
 
+EXPECTED_ALIAS_STATION_IDS = {
+    "García": "6495",
+    "Ciudad Benito Juárez": "8113",
+    "Benito Juarez": "8113",
+    "Benito Juárez": "8113",
+    "Cadereyta Jiménez": "10950",
+    "Cadereyta": "10950",
+}
+
 
 def test_expected_active_api_names_are_covered_by_mapping_registry():
     assert waqi_api.EXPECTED_ACTIVE_API_NAMES == (
@@ -66,7 +75,10 @@ def test_station_mapping_snapshot_marks_all_expected_cities_verified():
         assert by_api_name[api_name]["verified"] is True
         assert by_api_name[api_name]["evidence"]
 
-    assert waqi_api.WAQI_STATION_BY_API_NAME["Ciudad Benito Juárez"] == "8113"
+
+def test_station_mapping_supports_known_supabase_name_aliases():
+    for api_name, station_id in EXPECTED_ALIAS_STATION_IDS.items():
+        assert waqi_api.WAQI_STATION_BY_API_NAME[api_name] == station_id
 
 
 def test_normalize_waqi_payload_success():
