@@ -42,6 +42,14 @@ For AirVisual fallback runs:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+`SUPABASE_URL` must be the public API URL:
+
+```text
+https://<project-ref>.supabase.co
+```
+
+Do not use the Postgres host (`db.<project-ref>.supabase.co`), Studio URL, project dashboard URL, or any old project URL.
+
 ## WAQI station mapping
 
 The expected active municipality coverage is defined in `waqi_api.EXPECTED_ACTIVE_API_NAMES` and guarded by tests. WAQI sync does not deactivate cities.
@@ -125,6 +133,7 @@ For WAQI, each fetch also logs the mapped station as `@station_id` or `unmapped`
 
 - GitHub disabled the scheduled workflow after repository inactivity.
 - A required GitHub Actions secret is missing or stale.
+- `SUPABASE_URL` points to a wrong, old, or DNS-unresolvable Supabase host.
 - WAQI token is invalid or missing.
 - A city has no verified WAQI station mapping.
 - WAQI payload is missing AQI, timestamp, or coordinates.
@@ -143,6 +152,24 @@ Recovery rule:
 - Allow null weather fields to flow into nullable `air_quality_readings` columns.
 - Run manual recovery with `force_update=true`, `provider=waqi`.
 - Verify SQL freshness and `get_latest_air_quality_per_city` after the run.
+
+## Incident note: Supabase DNS/connectivity failure
+
+If the run fails before WAQI fetch with an error like:
+
+```text
+Failed to get existing cities from Supabase: [Errno 11001] getaddrinfo failed
+```
+
+then the pipeline cannot resolve the Supabase API host from `SUPABASE_URL`.
+
+Recovery rule:
+
+- Check GitHub Actions secret `SUPABASE_URL`.
+- It must be `https://<project-ref>.supabase.co`.
+- Confirm the project is active in Supabase.
+- Confirm the same project hosts `cities`, `air_quality_readings`, and `get_latest_air_quality_per_city`.
+- Re-run manual recovery after correcting the secret.
 
 ## Post-run checks
 

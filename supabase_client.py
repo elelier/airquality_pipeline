@@ -1,8 +1,59 @@
 from datetime import datetime
 from dotenv import load_dotenv
-import os
 import logging
-from supabase import create_client, Client
+import os
+import socket
+from urllib.parse import urlparse
+
+from supabase import Client, create_client
+
+EXPECTED_SUPABASE_DOMAIN_SUFFIX = ".supabase.co"
+NON_API_SUPABASE_HOST_PREFIXES = ("db.",)
+
+
+def get_safe_supabase_url_host(supabase_url: str) -> str:
+    """Return a sanitized Supabase API host for logs/errors.
+
+    The Supabase project URL is public configuration, but this helper avoids
+    logging paths, query strings, keys, or the full original env value.
+    """
+    parsed = urlparse(supabase_url)
+    return parsed.hostname or "unparseable-host"
+
+
+def build_invalid_supabase_api_url_error(host: str) -> ValueError:
+    return ValueError(
+        "SUPABASE_URL no parece una API URL de Supabase. "
+        "Usa https://<project-ref>.supabase.co, no el host de Postgres ni otro endpoint. "
+        f"Host detectado: {host}."
+    )
+
+
+def validate_supabase_url(supabase_url: str) -> None:
+    """Fail fast on malformed or DNS-unresolvable Supabase API URLs."""
+    parsed = urlparse(supabase_url)
+    host = parsed.hostname
+
+    if parsed.scheme != "https" or not host:
+        raise ValueError(
+            "SUPABASE_URL debe ser la API URL pública, por ejemplo "
+            "https://<project-ref>.supabase.co. "
+            f"Host detectado: {host or 'unparseable-host'}."
+        )
+
+    if not host.endswith(EXPECTED_SUPABASE_DOMAIN_SUFFIX):
+        raise build_invalid_supabase_api_url_error(host)
+
+    if host.startswith(NON_API_SUPABASE_HOST_PREFIXES):
+        raise build_invalid_supabase_api_url_error(host)
+
+    try:
+        socket.getaddrinfo(host, 443)
+    except socket.gaierror as error:
+        raise ValueError(
+            "SUPABASE_URL apunta a un host que no resuelve por DNS. "
+            f"Host detectado: {host}. Revisa el secret SUPABASE_URL en GitHub Actions."
+        ) from error
 
 
 def get_supabase_client() -> Client:
@@ -16,10 +67,15 @@ def get_supabase_client() -> Client:
     if not supabase_url or not service_role_key:
         raise ValueError("Supabase URL and Service Role Key are required.")
 
+    validate_supabase_url(supabase_url)
+    safe_host = get_safe_supabase_url_host(supabase_url)
+
     try:
-        return create_client(supabase_url, service_role_key)
+        client = create_client(supabase_url, service_role_key)
+        logging.info("Supabase API host validated: %s", safe_host)
+        return client
     except Exception as e:
-        raise Exception(f"Error creating Supabase client: {str(e)}")
+        raise Exception(f"Error creating Supabase client for host {safe_host}: {str(e)}")
 
 def get_existing_cities():
     logging.info("Starting Get Existing Cities from Supabase")
