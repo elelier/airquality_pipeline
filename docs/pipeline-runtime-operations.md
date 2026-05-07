@@ -60,6 +60,8 @@ The expected active municipality coverage is defined in `waqi_api.EXPECTED_ACTIV
 
 Mappings are explicit, but every runtime fetch still fails closed before insert if WAQI does not return `status=ok`, AQI, timestamp, and coordinates inside Nuevo Leon.
 
+Weather fields are secondary. WAQI can omit `iaqi.t`, pressure, humidity, wind, or weather icon. Missing weather fields must be persisted as null instead of blocking an otherwise valid AQI reading. If temperature is present, range validation still applies.
+
 Do not guess stations silently.
 
 ## Station verification criteria
@@ -94,8 +96,9 @@ A run is unhealthy when:
 
 - there are no active cities,
 - any fatal city update fails,
-- updates were attempted but zero readings were inserted, or
-- no active city was updated or skipped.
+- updates were attempted but zero readings were inserted,
+- no active city was updated or skipped,
+- AQI, timestamp, or coordinates are missing/invalid for all attempted cities.
 
 `station_not_mapped` is non-fatal only when at least one mapped city inserts a reading or all healthy mapped cities are up-to-date.
 
@@ -124,9 +127,22 @@ For WAQI, each fetch also logs the mapped station as `@station_id` or `unmapped`
 - A required GitHub Actions secret is missing or stale.
 - WAQI token is invalid or missing.
 - A city has no verified WAQI station mapping.
-- WAQI payload is missing AQI, timestamp, coordinates, or required weather fields.
+- WAQI payload is missing AQI, timestamp, or coordinates.
 - WAQI station coordinates are outside Nuevo León.
 - Supabase insert or update failed.
+- Frontend reads a valid RPC response but rejects or hides rows because of stale-data thresholds or cache.
+
+## Incident note: public data missing after WAQI coverage rollout
+
+Observed risk after the complete WAQI coverage rollout: the WAQI adapter correctly treats weather fields as optional, but shared payload validation still required `temperature_c`. If WAQI returned valid AQI, timestamp, and Nuevo León coordinates without `iaqi.t`, the pipeline rejected the reading with `validation_failed`, inserted nothing, and the public frontend had no fresh data to show.
+
+Recovery rule:
+
+- Keep AQI, timestamp, and coordinates mandatory.
+- Keep temperature range validation when temperature is present.
+- Allow null weather fields to flow into nullable `air_quality_readings` columns.
+- Run manual recovery with `force_update=true`, `provider=waqi`.
+- Verify SQL freshness and `get_latest_air_quality_per_city` after the run.
 
 ## Post-run checks
 
@@ -160,6 +176,10 @@ group by
   c.last_update_status,
   c.last_successful_update_at
 order by c.is_active desc, latest_reading_timestamp desc nulls last;
+```
+
+```sql
+select * from public.get_latest_air_quality_per_city();
 ```
 
 The frontend only consumes the data. Pipeline health must be validated from this repo and Supabase.

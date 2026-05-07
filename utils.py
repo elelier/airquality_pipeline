@@ -106,9 +106,10 @@ def compute_inter_city_delay(consecutive_failures: int = 0) -> float:
 
 
 def validate_reading_payload(reading: dict) -> dict:
-    """Validate pollution/weather payload ranges and coordinates.
+    """Validate required reading fields and optional weather ranges.
 
-    Returns {"valid": bool, "reasons": list[str]}.
+    AQI and coordinates remain mandatory. Weather fields from WAQI can be
+    partial or null; when temperature is present, its range is still guarded.
     """
     reasons = []
     if not isinstance(reading, dict):
@@ -125,10 +126,11 @@ def validate_reading_payload(reading: dict) -> dict:
     elif aqi_us < 0 or aqi_us > 500:
         reasons.append("aqi_us_out_of_range")
 
-    if temperature_c is None or not isinstance(temperature_c, (int, float)):
-        reasons.append("missing_or_invalid_temperature")
-    elif temperature_c < -50 or temperature_c > 60:
-        reasons.append("temperature_out_of_range")
+    if temperature_c is not None:
+        if not isinstance(temperature_c, (int, float)):
+            reasons.append("invalid_temperature")
+        elif temperature_c < -50 or temperature_c > 60:
+            reasons.append("temperature_out_of_range")
 
     if lat is None or lon is None:
         reasons.append("missing_coordinates")

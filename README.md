@@ -30,7 +30,7 @@ El pipeline conserva las ciudades existentes en Supabase y usa `city_id` como id
 | Ciudad Benito Juarez | Verificada por página pública AQICN + validación runtime | `@8113` | Juarez, Nuevo León / Cloud API H8113. |
 | Cadereyta Jimenez | Verificada por página pública AQICN + validación runtime | `@10950` | Cadereyta, Monterrey, Nuevo León / Cloud API H10950. |
 
-Las estaciones quedan sujetas a validación runtime antes de insertar: `status=ok`, AQI, timestamp y coordenadas dentro de Nuevo León. Si WAQI devuelve payload inválido o fuera de rango, el pipeline falla cerrado y no inserta lectura.
+Las estaciones quedan sujetas a validación runtime antes de insertar: `status=ok`, AQI, timestamp y coordenadas dentro de Nuevo León. Si WAQI devuelve payload inválido o fuera de rango, el pipeline falla cerrado y no inserta lectura. Los campos meteorológicos son secundarios: si WAQI entrega temperatura, se valida rango; si faltan temperatura, humedad, viento o presión, la lectura puede insertarse con esos campos nulos.
 
 #### Criterio para habilitar o cambiar una estación WAQI
 
@@ -52,8 +52,9 @@ Si cualquier punto queda dudoso, mantener o regresar el mapping a `None` + TODO 
   - Delay entre ciudades: 8-15s con jitter aleatorio
   - Timeout de 45s por request HTTP
 - **Validación de datos**: 
-  - Rechaza AQI fuera de rango 0-500
-  - Rechaza temperatura < -50°C o > 60°C
+  - Rechaza AQI faltante, no numérico o fuera de rango 0-500
+  - Rechaza temperatura fuera de rango < -50°C o > 60°C cuando WAQI la entrega
+  - Permite campos meteorológicos nulos cuando el proveedor no los entrega
   - Valida coordenadas dentro de Nuevo León (lat 25-26.5, lon -101 a -99)
 - **Fail-closed**: Si faltan AQI, timestamp, coordenadas o mapeo de estación, se actualiza `cities.last_update_status` con `error:*` y no se inserta lectura.
 
