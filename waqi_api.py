@@ -36,6 +36,8 @@ WAQI_STATION_BY_API_NAME = {
     "García": "6495",
     "Ciudad Benito Juarez": "8113",
     "Ciudad Benito Juárez": "8113",
+    "Cuidad Benito Juarez": "8113",
+    "Cuidad Benito Juárez": "8113",
     "Benito Juarez": "8113",
     "Benito Juárez": "8113",
     "Cadereyta Jimenez": "10950",
