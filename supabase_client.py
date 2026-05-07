@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from supabase import Client, create_client
 
 EXPECTED_SUPABASE_DOMAIN_SUFFIX = ".supabase.co"
+NON_API_SUPABASE_HOST_PREFIXES = ("db.",)
 
 
 def get_safe_supabase_url_host(supabase_url: str) -> str:
@@ -18,6 +19,14 @@ def get_safe_supabase_url_host(supabase_url: str) -> str:
     """
     parsed = urlparse(supabase_url)
     return parsed.hostname or "unparseable-host"
+
+
+def build_invalid_supabase_api_url_error(host: str) -> ValueError:
+    return ValueError(
+        "SUPABASE_URL no parece una API URL de Supabase. "
+        "Usa https://<project-ref>.supabase.co, no el host de Postgres ni otro endpoint. "
+        f"Host detectado: {host}."
+    )
 
 
 def validate_supabase_url(supabase_url: str) -> None:
@@ -33,11 +42,10 @@ def validate_supabase_url(supabase_url: str) -> None:
         )
 
     if not host.endswith(EXPECTED_SUPABASE_DOMAIN_SUFFIX):
-        raise ValueError(
-            "SUPABASE_URL no parece una API URL de Supabase. "
-            "Usa https://<project-ref>.supabase.co, no el host de Postgres ni otro endpoint. "
-            f"Host detectado: {host}."
-        )
+        raise build_invalid_supabase_api_url_error(host)
+
+    if host.startswith(NON_API_SUPABASE_HOST_PREFIXES):
+        raise build_invalid_supabase_api_url_error(host)
 
     try:
         socket.getaddrinfo(host, 443)
