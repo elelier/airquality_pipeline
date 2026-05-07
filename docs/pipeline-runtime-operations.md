@@ -42,6 +42,11 @@ For AirVisual fallback runs:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+For the read-only RPC contract health check:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
 `SUPABASE_URL` must be the public API URL:
 
 ```text
@@ -93,6 +98,70 @@ When data is stale, run the workflow manually with:
 
 This bypasses the timestamp interval check and attempts to refresh all active cities.
 
+## RPC contract health check
+
+Use `scripts/rpc_contract_health.py` to verify the shared read contract exposed by `get_latest_air_quality_per_city` without writing to Supabase.
+
+The check validates:
+
+- RPC response is an array.
+- Expected columns are present.
+- `city_id` is numeric and unique.
+- The current expected active city IDs are present: `1,4,5,6,7,9,11,12,13`.
+- Healthy rows have non-null `aqi_us`.
+- `reading_timestamp` parses as an offset-aware UTC timestamp.
+- `last_successful_update_at` parses as an offset-aware UTC timestamp when present.
+- Freshness is degraded after 2 hours and unhealthy after 6 hours by default.
+
+Run locally with production credentials already available in the environment:
+
+```bash
+python scripts/rpc_contract_health.py
+```
+
+Optional overrides:
+
+```bash
+EXPECTED_ACTIVE_CITY_IDS=1,4,5,6,7,9,11,12,13 \
+RPC_FRESHNESS_WARN_HOURS=2 \
+RPC_FRESHNESS_FAIL_HOURS=6 \
+python scripts/rpc_contract_health.py
+```
+
+Run from GitHub Actions manually:
+
+- Open **Air Quality Pipeline** workflow.
+- Use **Run workflow**.
+- Set `rpc_contract_health=true`.
+- Leave `force_update=false` unless doing a separate recovery run.
+
+The manual health job runs tests first, then runs the read-only RPC check and uploads `rpc-contract-health.log`.
+
+Exit codes:
+
+- `0`: healthy or degraded. Degraded means contract is intact, but one or more readings are older than the warning threshold.
+- `1`: unhealthy contract/freshness. Examples: missing expected city ID, duplicate `city_id`, null `aqi_us`, invalid timestamp, or stale reading beyond the fail threshold.
+- `2`: configuration or connection failure. Examples: missing Supabase env vars, wrong `SUPABASE_URL`, DNS failure, or RPC call failure.
+
+Sample healthy output shape:
+
+```json
+{
+  "status": "healthy",
+  "rpc": "get_latest_air_quality_per_city",
+  "expected_city_ids": [1, 4, 5, 6, 7, 9, 11, 12, 13],
+  "returned_city_ids": [1, 4, 5, 6, 7, 9, 11, 12, 13],
+  "errors": [],
+  "warnings": []
+}
+```
+
+Rollback:
+
+- Revert the PR that introduced `scripts/rpc_contract_health.py`, its tests, docs, and workflow job.
+- No Supabase schema, RPC shape, table data, or frontend runtime change is required to roll back this check.
+- If this check fails after rollback, continue using the SQL post-run checks below because they query the same contract boundary manually.
+
 ## Healthy run criteria
 
 A run is healthy when:
@@ -139,6 +208,7 @@ For WAQI, each fetch also logs the mapped station as `@station_id` or `unmapped`
 - WAQI payload is missing AQI, timestamp, or coordinates.
 - WAQI station coordinates are outside Nuevo León.
 - Supabase insert or update failed.
+- RPC health check fails because an expected active city is missing, duplicated, stale, or has null AQI.
 - Frontend reads a valid RPC response but rejects or hides rows because of stale-data thresholds or cache.
 
 ## Incident note: public data missing after WAQI coverage rollout
