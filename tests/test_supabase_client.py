@@ -19,9 +19,12 @@ def test_get_supabase_client(mock_create_client, mock_getaddrinfo, monkeypatch):
     mock_create_client.assert_called_once_with('https://example-project.supabase.co', 'test_key')
 
 
-def test_validate_supabase_url_rejects_postgres_host():
+@patch('supabase_client.socket.getaddrinfo')
+def test_validate_supabase_url_rejects_postgres_host(mock_getaddrinfo):
     with pytest.raises(ValueError, match='no parece una API URL de Supabase'):
         supabase_client.validate_supabase_url('https://db.example-project.supabase.co')
+
+    mock_getaddrinfo.assert_not_called()
 
 
 @patch('supabase_client.socket.getaddrinfo', side_effect=socket.gaierror('dns failed'))
