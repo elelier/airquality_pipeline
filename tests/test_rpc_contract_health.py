@@ -44,6 +44,14 @@ def make_all_rows(**overrides):
     return [make_row(city_id, **overrides) for city_id in sorted(DEFAULT_EXPECTED_ACTIVE_CITY_IDS)]
 
 
+def make_runtime_rows(*, reading_age: timedelta = timedelta(minutes=45)):
+    now = datetime.now(timezone.utc)
+    return make_all_rows(
+        reading_timestamp=(now - reading_age).isoformat(),
+        last_successful_update_at=(now - timedelta(minutes=30)).isoformat(),
+    )
+
+
 def test_evaluate_rpc_contract_success_for_9_expected_ids():
     result = evaluate_rpc_contract(make_all_rows(), now_utc=NOW)
 
@@ -153,12 +161,12 @@ def test_fetch_rpc_rows_rejects_non_array_response():
 
 
 def test_main_exit_codes_for_healthy_degraded_unhealthy_and_config_error(capsys):
-    with patch("scripts.rpc_contract_health.fetch_rpc_rows", return_value=make_all_rows()):
+    with patch("scripts.rpc_contract_health.fetch_rpc_rows", return_value=make_runtime_rows()):
         assert main(["--json-only"]) == 0
 
     with patch(
         "scripts.rpc_contract_health.fetch_rpc_rows",
-        return_value=make_all_rows(reading_timestamp=(NOW - timedelta(hours=7)).isoformat()),
+        return_value=make_runtime_rows(reading_age=timedelta(hours=7)),
     ):
         assert main(["--json-only"]) == 1
 
