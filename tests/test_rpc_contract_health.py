@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import runpy
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +18,13 @@ from scripts.rpc_contract_health import (
 
 
 NOW = datetime(2026, 5, 7, 13, 0, tzinfo=timezone.utc)
+
+
+def test_rpc_contract_health_script_imports_from_scripts_path():
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "rpc_contract_health.py"
+    namespace = runpy.run_path(str(script_path), run_name="rpc_contract_health_import_test")
+
+    assert namespace["RPC_NAME"] == "get_latest_air_quality_per_city"
 
 
 def make_row(city_id: int, **overrides):
