@@ -1,0 +1,50 @@
+[
+  {
+    "city_id": 9,
+    "city_name": "Monterrey",
+    "api_name": "Monterrey",
+    "latitude": 25.6866,
+    "longitude": -100.3161,
+    "reading_timestamp": "2026-05-21T16:00:00+00:00",
+    "aqi_us": 42,
+    "main_pollutant_us": "pm25",
+    "temperature_c": 28.4,
+    "humidity_percent": 45,
+    "wind_speed_ms": 2.7,
+    "wind_direction_deg": 120,
+    "weather_icon": "01d",
+    "last_successful_update_at": "2026-05-21T16:13:00+00:00"
+  },
+  {
+    "city_id": 13,
+    "city_name": "Santa Catarina",
+    "api_name": "Santa Catarina",
+    "latitude": null,
+    "longitude": null,
+    "reading_timestamp": "2026-05-21T15:00:00+00:00",
+    "aqi_us": 87,
+    "main_pollutant_us": null,
+    "temperature_c": null,
+    "humidity_percent": null,
+    "wind_speed_ms": null,
+    "wind_direction_deg": null,
+    "weather_icon": null,
+    "last_successful_update_at": null
+  },
+  {
+    "city_id": 1,
+    "city_name": "Cadereyta Jimenez",
+    "api_name": "Cadereyta Jimenez",
+    "latitude": 25.5894,
+    "longitude": -99.9969,
+    "reading_timestamp": "2026-05-21T14:00:00+00:00",
+    "aqi_us": null,
+    "main_pollutant_us": null,
+    "temperature_c": null,
+    "humidity_percent": null,
+    "wind_speed_ms": null,
+    "wind_direction_deg": null,
+    "weather_icon": null,
+    "last_successful_update_at": "2026-05-21T14:58:00+00:00"
+  }
+]
