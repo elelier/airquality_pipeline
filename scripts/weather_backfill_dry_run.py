@@ -32,11 +32,18 @@ HOURLY_VARIABLES = (
     "wind_direction_10m",
     "wind_gusts_10m",
 )
+WEATHER_VALUE_FIELDS = (
+    "weather_temperature_c",
+    "weather_humidity_percent",
+    "weather_wind_speed_kmh",
+    "weather_wind_direction_deg",
+    "weather_wind_gust_kmh",
+)
 
 
 @dataclass(frozen=True)
 class CityInput:
-    city_id: str
+    city_id: int
     api_name: str
     latitude: float | None
     longitude: float | None
@@ -44,7 +51,7 @@ class CityInput:
 
 @dataclass(frozen=True)
 class AqiReadingInput:
-    city_id: str
+    city_id: int
     reading_timestamp: datetime | None
     temperature_c: float | None = None
     humidity_percent: float | None = None
@@ -74,6 +81,18 @@ def parse_utc_timestamp(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def parse_required_int(value: Any, field_name: str) -> int:
+    if value is None or value == "":
+        raise ValueError(f"{field_name} is required and must be an integer")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be an integer") from exc
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError(f"{field_name} must be an integer")
+    return parsed
+
+
 def parse_optional_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
@@ -94,7 +113,9 @@ def _read_records(path: Path) -> list[dict[str, Any]]:
                 value = payload.get(key)
                 if isinstance(value, list):
                     return [dict(item) for item in value if isinstance(item, dict)]
-        raise ValueError(f"{path} must contain an array or an object with rows/data")
+        raise ValueError(
+            f"{path} must contain an array or an object with rows/data/cities/readings"
+        )
     if suffix == ".csv":
         with path.open(newline="", encoding="utf-8") as handle:
             return [dict(row) for row in csv.DictReader(handle)]
@@ -106,7 +127,7 @@ def load_cities(path: Path) -> list[CityInput]:
     for row in _read_records(path):
         cities.append(
             CityInput(
-                city_id=str(row.get("city_id", "")).strip(),
+                city_id=parse_required_int(row.get("city_id"), "city_id"),
                 api_name=str(row.get("api_name", "")).strip(),
                 latitude=parse_optional_float(row.get("latitude")),
                 longitude=parse_optional_float(row.get("longitude")),
@@ -120,7 +141,7 @@ def load_readings(path: Path) -> list[AqiReadingInput]:
     for row in _read_records(path):
         readings.append(
             AqiReadingInput(
-                city_id=str(row.get("city_id", "")).strip(),
+                city_id=parse_required_int(row.get("city_id"), "city_id"),
                 reading_timestamp=parse_utc_timestamp(row.get("reading_timestamp")),
                 temperature_c=parse_optional_float(row.get("temperature_c")),
                 humidity_percent=parse_optional_float(row.get("humidity_percent")),
@@ -222,24 +243,6 @@ def validate_weather_row(
     weather_hour: WeatherHour,
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
-    selected = {
-        "weather_temperature_c": weather_hour.temperature_c,
-        "weather_humidity_percent": weather_hour.humidity_percent,
-        "weather_wind_speed_kmh": weather_hour.wind_speed_kmh,
-        "weather_wind_direction_deg": weather_hour.wind_direction_deg,
-        "weather_wind_gust_kmh": weather_hour.wind_gust_kmh,
-    }
-    if any(value is not None for value in selected.values()):
-        if not PROVIDER or weather_hour.timestamp is None:
-            issues.append(
-                _issue(
-                    "weather_nullability",
-                    "error",
-                    city,
-                    reading,
-                    "Weather source metadata missing",
-                )
-            )
 
     temperature = weather_hour.temperature_c
     if temperature is not None:
@@ -364,6 +367,40 @@ def validate_weather_row(
     return issues
 
 
+def validate_matched_report_row(
+    *,
+    city: CityInput,
+    reading: AqiReadingInput,
+    row: dict[str, Any],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    has_weather_value = any(row.get(field) is not None for field in WEATHER_VALUE_FIELDS)
+
+    if has_weather_value and (not row.get("weather_provider") or not row.get("weather_timestamp")):
+        issues.append(
+            _issue(
+                "weather_nullability",
+                "error",
+                city,
+                reading,
+                "weather_provider and weather_timestamp are required when weather_* values exist",
+            )
+        )
+
+    if "weather_wind_speed_ms" in row:
+        issues.append(
+            _issue(
+                "weather_wind_unit_violation",
+                "error",
+                city,
+                reading,
+                "Open-Meteo km/h values must not be reported in *_ms fields",
+            )
+        )
+
+    return issues
+
+
 def _issue(
     code: str,
     severity: str,
@@ -401,7 +438,7 @@ def build_dry_run_report(
     fetcher = weather_fetcher or _default_weather_fetcher
     generated = generated_at or datetime.now(timezone.utc)
     cities_by_id = {city.city_id: city for city in cities}
-    readings_by_city: dict[str, list[AqiReadingInput]] = {}
+    readings_by_city: dict[int, list[AqiReadingInput]] = {}
     validation_issues: list[dict[str, Any]] = []
     city_results: list[dict[str, Any]] = []
 
@@ -480,6 +517,10 @@ def build_dry_run_report(
                 continue
 
             weather_issues = validate_weather_row(city=city, reading=reading, weather_hour=match)
+            matched_row = _matched_row(reading, match, delta_minutes)
+            weather_issues.extend(
+                validate_matched_report_row(city=city, reading=reading, row=matched_row)
+            )
             city_issues.extend(weather_issues)
             if any(issue["code"].startswith("large_") for issue in weather_issues):
                 large_delta_rows += 1
@@ -500,7 +541,7 @@ def build_dry_run_report(
                 if max_delta_minutes is None
                 else max(max_delta_minutes, delta_minutes or 0)
             )
-            matched_rows.append(_matched_row(reading, match, delta_minutes))
+            matched_rows.append(matched_row)
             total_matched += 1
 
         validation_issues.extend(city_issues)
@@ -643,7 +684,7 @@ def write_report(report: dict[str, Any], output_path: Path | None) -> None:
         return
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(serialized + "\n", encoding="utf-8")
-    print(serialized)
+    print(f"Dry-run report written to {output_path}")
 
 
 def main(argv: list[str] | None = None) -> int:
