@@ -12,7 +12,7 @@ The script creates local evidence only. It does not change `main.py`, `update_ci
 
 ## No-write guarantees
 
-The dry-run uses local JSON/CSV input files and writes only to stdout or to a local report path provided with `--output`.
+The dry-run uses local JSON/CSV input files. Without `--output`, it prints the full JSON report to stdout. With `--output`, it writes the full JSON report to the local report path and prints only a short confirmation.
 
 It does not require:
 
@@ -32,7 +32,7 @@ JSON or CSV is accepted. Required columns/keys:
 
 | Field | Required | Notes |
 | --- | --- | --- |
-| `city_id` | yes | Stable MtyRespira city id. |
+| `city_id` | yes | Stable numeric MtyRespira city id. |
 | `api_name` | yes | City/provider display name used for reporting. |
 | `latitude` | yes | City latitude used for Open-Meteo lookup. |
 | `longitude` | yes | City longitude used for Open-Meteo lookup. |
@@ -56,7 +56,7 @@ JSON or CSV is accepted. Required columns/keys:
 
 | Field | Required | Notes |
 | --- | --- | --- |
-| `city_id` | yes | Must match the active cities file. |
+| `city_id` | yes | Stable numeric id. Must match the active cities file. |
 | `reading_timestamp` | yes | AQI measurement timestamp. UTC is recommended. |
 | `temperature_c` | no | Legacy WAQI weather field for QA delta only. |
 | `humidity_percent` | no | Legacy WAQI weather field for QA delta only. |
@@ -88,7 +88,7 @@ python scripts/weather_backfill_dry_run.py \
   --readings ./local/aqi-candidate-readings.json
 ```
 
-Save a local report file:
+Save a local report file. This writes the full JSON report to disk and prints only a short confirmation to stdout:
 
 ```bash
 python scripts/weather_backfill_dry_run.py \
@@ -127,7 +127,7 @@ The report uses explicit weather field names:
 
 For each candidate AQI row:
 
-1. Match by `city_id`.
+1. Match by numeric `city_id`.
 2. Use the city's `latitude` and `longitude`.
 3. Fetch hourly Open-Meteo weather for the candidate date range.
 4. Choose the weather hour nearest to `reading_timestamp`.
@@ -159,7 +159,7 @@ The dry-run reports the following issues:
 - Missing `reading_timestamp`.
 - Unmatched weather hour.
 - Weather metadata nullability:
-  - if any `weather_*` value is present, `weather_provider` and `weather_timestamp` must exist.
+  - if any `weather_*` value is present, `weather_provider` and `weather_timestamp` must exist in the matched report row.
 - Physical ranges:
   - `weather_temperature_c` hard reject outside `-50..60`.
   - Monterrey QA warning below `-20`.
@@ -171,6 +171,8 @@ The dry-run reports the following issues:
   - temperature delta `>= 8 °C`.
   - humidity delta `>= 25` points.
   - wind is not compared unless a future story explicitly defines unit normalization.
+- Wind unit guardrail:
+  - Open-Meteo km/h values must be reported as `weather_wind_speed_kmh`, never as a `*_ms` weather field.
 
 ## Interpreting results
 
@@ -202,7 +204,8 @@ The tests avoid real network calls by injecting a fake weather fetcher. They cov
 - previous-hour tie breaker.
 - range validation.
 - temperature and humidity deltas against WAQI legacy fields.
-- wind-unit field naming.
+- weather metadata nullability on matched report rows.
+- wind-unit field naming and violation detection.
 - report summary and per-city results.
 - no Supabase client or mutation tokens in the dry-run script.
 
