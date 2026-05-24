@@ -385,7 +385,8 @@ def _issue(
         "message": message,
     }
     if extra:
-        payload.update(extra)
+        for key, value in extra.items():
+            payload[key] = value
     return payload
 
 
