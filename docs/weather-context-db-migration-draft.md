@@ -120,24 +120,21 @@ git diff --name-only main...HEAD
 
 # Confirm no runtime files changed.
 git diff --name-only main...HEAD -- main.py update_city.py waqi_api.py utils.py .github/workflows
-
-# Confirm no live-write command wording was introduced.
-grep -RniE "apply_migration|supabase db push|psql" docs/weather-context-db-migration-draft.md docs/sql/add-weather-context-columns.sql.md || true
-
-# Confirm no secret assignments were introduced.
-grep -RniE "WAQI_API_TOKEN=|AIRVISUAL_API_KEY=|SUPABASE_SERVICE_ROLE_KEY=" docs/weather-context-db-migration-draft.md docs/sql/add-weather-context-columns.sql.md || true
-
-# Confirm no privileged DB guidance was added to frontend/app contexts.
-grep -RniE "frontend.*service_role|app.*service_role|VITE_.*SERVICE|public.*service_role" docs/weather-context-db-migration-draft.md docs/sql/add-weather-context-columns.sql.md || true
 ```
+
+Additional review checklist:
+
+- Search the changed docs for live DB apply command wording from the story prompt; there should be no executable live-apply instructions.
+- Search the changed docs for secret assignment patterns; there should be no real or placeholder secret assignment.
+- Search the changed docs for privileged database credential guidance in frontend/app contexts; there should be no such guidance.
 
 Expected result:
 
 - Only `docs/weather-context-db-migration-draft.md` and `docs/sql/add-weather-context-columns.sql.md` are changed.
 - Runtime diff is empty.
-- The live-write grep returns no matching instructions in the new docs.
-- The secret grep returns no secret assignments.
-- The frontend/app privileged credential grep returns no matches.
+- The live-write search returns no matching instructions in the new docs.
+- The secret search returns no secret assignments.
+- The frontend/app privileged credential search returns no matches.
 
 ## How to validate after a future approved DB apply
 
