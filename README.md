@@ -77,6 +77,14 @@ Si cualquier punto queda dudoso, mantener o regresar el mapping a `None` + TODO 
 - **utils.py** 🔧: Funciones auxiliares y utilidades.
 - **main.py** 🚀: Punto de entrada principal del sistema.
 
+## 📚 Documentación
+
+- [Provider Continuity Readiness](docs/provider-continuity-readiness.md)
+- [Provider Continuity Runbook](docs/provider-continuity-runbook.md)
+- [Weather Context Provider Spike](docs/weather-context-provider-spike.md)
+- [Weather Context Dry-Run](docs/weather-context-dry-run.md)
+- [Weather Contract Migration Proposal](docs/weather-contract-migration-proposal.md)
+
 ## 📋 Requisitos
 
 ### 🐍 Dependencias
