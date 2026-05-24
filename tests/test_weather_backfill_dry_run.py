@@ -9,6 +9,7 @@ from scripts.weather_backfill_dry_run import (
     WeatherHour,
     build_dry_run_report,
     find_nearest_weather_hour,
+    validate_matched_report_row,
     validate_weather_row,
 )
 
@@ -18,7 +19,7 @@ def ts(value: str) -> datetime:
 
 
 def city() -> CityInput:
-    return CityInput(city_id="9", api_name="Monterrey", latitude=25.6866, longitude=-100.3161)
+    return CityInput(city_id=9, api_name="Monterrey", latitude=25.6866, longitude=-100.3161)
 
 
 def weather(timestamp: str, **overrides: float) -> WeatherHour:
@@ -71,7 +72,7 @@ def test_nearest_hour_tie_breaker_chooses_previous_hour() -> None:
 
 
 def test_weather_range_validation_flags_errors_and_warnings() -> None:
-    reading = AqiReadingInput(city_id="9", reading_timestamp=ts("2026-05-24T12:00:00Z"))
+    reading = AqiReadingInput(city_id=9, reading_timestamp=ts("2026-05-24T12:00:00Z"))
     issues = validate_weather_row(
         city=city(),
         reading=reading,
@@ -95,7 +96,7 @@ def test_weather_range_validation_flags_errors_and_warnings() -> None:
 
 def test_delta_temperature_and_humidity_vs_waqi_legacy_fields() -> None:
     reading = AqiReadingInput(
-        city_id="9",
+        city_id=9,
         reading_timestamp=ts("2026-05-24T12:00:00Z"),
         temperature_c=15.5,
         humidity_percent=20.0,
@@ -111,8 +112,23 @@ def test_delta_temperature_and_humidity_vs_waqi_legacy_fields() -> None:
     assert "large_humidity_delta_vs_waqi" in codes
 
 
+def test_matched_report_row_validates_weather_metadata_nullability() -> None:
+    reading = AqiReadingInput(city_id=9, reading_timestamp=ts("2026-05-24T12:00:00Z"))
+    issues = validate_matched_report_row(
+        city=city(),
+        reading=reading,
+        row={
+            "weather_temperature_c": 28.0,
+            "weather_timestamp": None,
+            "weather_provider": None,
+        },
+    )
+
+    assert {issue["code"] for issue in issues} == {"weather_nullability"}
+
+
 def test_report_uses_weather_wind_speed_kmh_not_legacy_ms() -> None:
-    reading = AqiReadingInput(city_id="9", reading_timestamp=ts("2026-05-24T12:00:00Z"))
+    reading = AqiReadingInput(city_id=9, reading_timestamp=ts("2026-05-24T12:00:00Z"))
     report = build_dry_run_report(
         cities=[city()],
         readings=[reading],
@@ -126,10 +142,25 @@ def test_report_uses_weather_wind_speed_kmh_not_legacy_ms() -> None:
     assert report["unit_contract"]["weather_wind_speed_field"] == "weather_wind_speed_kmh"
 
 
+def test_matched_report_row_flags_unit_violation() -> None:
+    reading = AqiReadingInput(city_id=9, reading_timestamp=ts("2026-05-24T12:00:00Z"))
+    issues = validate_matched_report_row(
+        city=city(),
+        reading=reading,
+        row={
+            "weather_provider": "open-meteo",
+            "weather_timestamp": "2026-05-24T12:00:00Z",
+            "weather_wind_speed_ms": 12.0,
+        },
+    )
+
+    assert {issue["code"] for issue in issues} == {"weather_wind_unit_violation"}
+
+
 def test_report_summary_and_city_results() -> None:
     readings = [
-        AqiReadingInput(city_id="9", reading_timestamp=ts("2026-05-24T12:00:00Z")),
-        AqiReadingInput(city_id="9", reading_timestamp=ts("2026-05-24T12:31:00Z")),
+        AqiReadingInput(city_id=9, reading_timestamp=ts("2026-05-24T12:00:00Z")),
+        AqiReadingInput(city_id=9, reading_timestamp=ts("2026-05-24T12:31:00Z")),
     ]
     report = build_dry_run_report(
         cities=[city()],
@@ -144,13 +175,16 @@ def test_report_summary_and_city_results() -> None:
     assert report["summary"]["target_aqi_rows"] == 2
     assert report["summary"]["matched_rows"] == 1
     assert report["summary"]["unmatched_rows"] == 1
-    assert report["city_results"][0]["city_id"] == "9"
+    assert report["city_results"][0]["city_id"] == 9
     assert report["city_results"][0]["matched_rows"] == 1
     assert report["city_results"][0]["unmatched_rows"] == 1
 
 
 def test_script_source_does_not_call_supabase_mutations() -> None:
-    source = Path("scripts/weather_backfill_dry_run.py").read_text(encoding="utf-8")
+    repo_root = Path(__file__).resolve().parents[1]
+    source = (repo_root / "scripts" / "weather_backfill_dry_run.py").read_text(
+        encoding="utf-8"
+    )
     forbidden_tokens = [
         ".insert(",
         ".update(",
