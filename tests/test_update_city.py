@@ -40,6 +40,48 @@ def test_update_city_success(mock_supabase_client, success_fetch_result):
     mock_supabase_client.table.return_value.insert.assert_called_once()
     mock_supabase_client.table.return_value.update.return_value.eq.assert_called_once_with('id', 1)
 
+
+def test_update_city_maps_successful_weather_context(mock_supabase_client, success_fetch_result):
+    success_fetch_result['weather_context'] = {
+        'status': 'success',
+        'weather_temperature_c': 28,
+        'weather_humidity_percent': 50,
+        'weather_wind_speed_kmh': 12.5,
+        'weather_wind_direction_deg': 180,
+        'weather_wind_gust_kmh': 22.1,
+        'weather_provider': 'open-meteo',
+        'weather_timestamp': '2026-05-25T01:00:00+00:00',
+        'weather_source_payload': {'current': {'temperature_2m': 28}},
+    }
+
+    result = update_city(success_fetch_result)
+
+    assert result['readingInserted'] is True
+    inserted_payload = mock_supabase_client.table.return_value.insert.call_args.args[0]
+    assert inserted_payload['weather_temperature_c'] == 28
+    assert inserted_payload['weather_humidity_percent'] == 50
+    assert inserted_payload['weather_wind_speed_kmh'] == 12.5
+    assert inserted_payload['weather_wind_direction_deg'] == 180
+    assert inserted_payload['weather_wind_gust_kmh'] == 22.1
+    assert inserted_payload['weather_provider'] == 'open-meteo'
+    assert inserted_payload['weather_timestamp'] == '2026-05-25T01:00:00+00:00'
+    assert inserted_payload['weather_source_payload'] == {'current': {'temperature_2m': 28}}
+
+
+def test_update_city_ignores_failed_weather_context(mock_supabase_client, success_fetch_result):
+    success_fetch_result['weather_context'] = {
+        'status': 'error',
+        'provider': 'open-meteo',
+        'errorType': 'fetch_failed',
+    }
+
+    result = update_city(success_fetch_result)
+
+    assert result['readingInserted'] is True
+    inserted_payload = mock_supabase_client.table.return_value.insert.call_args.args[0]
+    assert 'weather_temperature_c' not in inserted_payload
+    assert 'weather_provider' not in inserted_payload
+
 def test_update_city_fetch_error(mock_supabase_client):
     """Test update_city when the fetch result indicates an error."""
     error_result = {

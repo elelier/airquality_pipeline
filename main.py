@@ -12,6 +12,7 @@ from sync_cities import sync_cities
 from update_city import update_city
 from utils import check_if_update_needed, compute_inter_city_delay, delay, setup_logging
 from waqi_api import fetch_air_quality_data as fetch_waqi_air_quality_data
+from weather_context import enrich_with_weather_context
 
 setup_logging()
 load_dotenv()
@@ -79,6 +80,8 @@ def build_summary(force_update: bool, provider: str) -> dict:
         "validation_failures": 0,
         "insert_errors": 0,
         "update_errors": 0,
+        "weather_context_success": 0,
+        "weather_context_errors": 0,
         "city_results": [],
         "sync_summary": None,
     }
@@ -109,6 +112,8 @@ def log_pipeline_summary(summary: dict) -> None:
     logging.info("Fallos de validacion: %s", safe_summary["validation_failures"])
     logging.info("Errores de insert: %s", safe_summary["insert_errors"])
     logging.info("Errores de update status: %s", safe_summary["update_errors"])
+    logging.info("Weather context exitoso: %s", safe_summary["weather_context_success"])
+    logging.info("Weather context errores: %s", safe_summary["weather_context_errors"])
 
     if safe_summary.get("sync_summary") is not None:
         logging.info("Sync summary: %s", safe_summary["sync_summary"])
@@ -189,6 +194,12 @@ def main(force_update=False) -> dict:
 
             fetch_result = fetch_provider_air_quality(provider, city, env)
             fetch_result["city_id"] = city["id"]
+            fetch_result = enrich_with_weather_context(fetch_result)
+            weather_context = fetch_result.get("weather_context") or {}
+            if weather_context.get("status") == "success":
+                summary["weather_context_success"] += 1
+            elif weather_context:
+                summary["weather_context_errors"] += 1
 
             update_result = update_city(fetch_or_skip_result=fetch_result)
             successful_insert = (
@@ -238,6 +249,8 @@ def main(force_update=False) -> dict:
                     "needed_update": True,
                     "fetch_status": fetch_result.get("status"),
                     "fetch_error_type": fetch_result.get("errorType"),
+                    "weather_context_status": weather_context.get("status"),
+                    "weather_context_error_type": weather_context.get("errorType"),
                     "reading_inserted": bool(update_result.get("readingInserted")),
                     "city_status_updated": bool(update_result.get("cityStatusUpdated")),
                     "insert_error": update_result.get("insertError"),
