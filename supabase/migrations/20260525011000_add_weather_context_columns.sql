@@ -11,6 +11,33 @@ alter table public.air_quality_readings
   add column if not exists weather_source_payload jsonb,
   add column if not exists weather_backfilled_at timestamptz;
 
+comment on column public.air_quality_readings.weather_temperature_c is
+  'Canonical weather temperature in Celsius from selected weather provider bucket.';
+
+comment on column public.air_quality_readings.weather_humidity_percent is
+  'Canonical relative humidity percentage from selected weather provider bucket.';
+
+comment on column public.air_quality_readings.weather_wind_speed_kmh is
+  'Canonical weather wind speed in kilometers per hour.';
+
+comment on column public.air_quality_readings.weather_wind_direction_deg is
+  'Canonical weather wind direction in degrees from selected weather provider bucket.';
+
+comment on column public.air_quality_readings.weather_wind_gust_kmh is
+  'Canonical weather wind gust in kilometers per hour from selected weather provider bucket.';
+
+comment on column public.air_quality_readings.weather_provider is
+  'Canonical weather provider identifier.';
+
+comment on column public.air_quality_readings.weather_timestamp is
+  'Weather provider bucket timestamp, separate from AQI reading timestamp.';
+
+comment on column public.air_quality_readings.weather_source_payload is
+  'Selected weather provider payload slice for traceability.';
+
+comment on column public.air_quality_readings.weather_backfilled_at is
+  'Timestamp set by a future approved weather backfill.';
+
 alter table public.air_quality_readings
   add constraint air_quality_readings_weather_temperature_c_range
   check (weather_temperature_c is null or weather_temperature_c between -50 and 60)
