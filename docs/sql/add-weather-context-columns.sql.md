@@ -70,6 +70,7 @@ begin
   if not exists (
     select 1 from pg_constraint
     where conname = 'air_quality_readings_weather_temperature_c_range'
+      and conrelid = 'public.air_quality_readings'::regclass
   ) then
     alter table public.air_quality_readings
       add constraint air_quality_readings_weather_temperature_c_range
@@ -82,6 +83,7 @@ begin
   if not exists (
     select 1 from pg_constraint
     where conname = 'air_quality_readings_weather_humidity_percent_range'
+      and conrelid = 'public.air_quality_readings'::regclass
   ) then
     alter table public.air_quality_readings
       add constraint air_quality_readings_weather_humidity_percent_range
@@ -94,6 +96,7 @@ begin
   if not exists (
     select 1 from pg_constraint
     where conname = 'air_quality_readings_weather_wind_speed_kmh_nonnegative'
+      and conrelid = 'public.air_quality_readings'::regclass
   ) then
     alter table public.air_quality_readings
       add constraint air_quality_readings_weather_wind_speed_kmh_nonnegative
@@ -106,6 +109,7 @@ begin
   if not exists (
     select 1 from pg_constraint
     where conname = 'air_quality_readings_weather_wind_direction_deg_range'
+      and conrelid = 'public.air_quality_readings'::regclass
   ) then
     alter table public.air_quality_readings
       add constraint air_quality_readings_weather_wind_direction_deg_range
@@ -118,6 +122,7 @@ begin
   if not exists (
     select 1 from pg_constraint
     where conname = 'air_quality_readings_weather_wind_gust_kmh_nonnegative'
+      and conrelid = 'public.air_quality_readings'::regclass
   ) then
     alter table public.air_quality_readings
       add constraint air_quality_readings_weather_wind_gust_kmh_nonnegative
@@ -130,6 +135,7 @@ begin
   if not exists (
     select 1 from pg_constraint
     where conname = 'air_quality_readings_weather_metadata_required'
+      and conrelid = 'public.air_quality_readings'::regclass
   ) then
     alter table public.air_quality_readings
       add constraint air_quality_readings_weather_metadata_required
