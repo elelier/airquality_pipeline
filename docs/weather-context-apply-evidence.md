@@ -4,6 +4,7 @@ Status: applied / evidence captured
 Scope: `elelier/airquality_pipeline`  
 Target DB: `monterrey-respira-db` (`xjekikweaiddfwjjaqbd`)  
 Apply timestamp: 2026-05-25 01:35 UTC  
+Catalog verification timestamp: 2026-05-25 01:40 UTC  
 Decision type: DB apply / Data QA / Docs
 
 ## Purpose
@@ -56,20 +57,76 @@ Supabase migration history after apply:
 }
 ```
 
+## Catalog verification
+
+Supabase read-only table inspection succeeded after retry.
+
+Target table:
+
+| Field | Value |
+| --- | --- |
+| Table | `public.air_quality_readings` |
+| RLS | enabled |
+| Approx rows reported | `1766` |
+
+Legacy AQI/data-contract columns still present:
+
+- `id`
+- `city_id`
+- `reading_timestamp`
+- `aqi_us`
+- `main_pollutant_us`
+- `temperature_c`
+- `pressure_hpa`
+- `humidity_percent`
+- `wind_speed_ms`
+- `wind_direction_deg`
+- `weather_icon`
+- `raw_api_response`
+- `created_at`
+
+New canonical weather-context columns present and nullable:
+
+| Column | Type | Nullable | Comment present |
+| --- | --- | --- | --- |
+| `weather_temperature_c` | `real` | yes | yes |
+| `weather_humidity_percent` | `smallint` | yes | yes |
+| `weather_wind_speed_kmh` | `real` | yes | yes |
+| `weather_wind_direction_deg` | `smallint` | yes | yes |
+| `weather_wind_gust_kmh` | `real` | yes | yes |
+| `weather_provider` | `text` | yes | yes |
+| `weather_timestamp` | `timestamp with time zone` | yes | yes |
+| `weather_source_payload` | `jsonb` | yes | yes |
+| `weather_backfilled_at` | `timestamp with time zone` | yes | yes |
+
+Constraint evidence from read-only table inspection:
+
+- Weather range checks are present on the relevant `weather_*` columns.
+- The checks are reported as `NOT VALID`, matching the migration strategy.
+- The connector output exposes check snippets attached to columns, not a full constraint-by-constraint catalog listing.
+
+Primary and foreign key evidence remained intact:
+
+- Primary key: `id`.
+- Foreign key: `air_quality_readings.city_id` → `cities.id`.
+
 ## Verification status
 
-Confirmed by migration history:
+Confirmed:
 
 - The migration was accepted by Supabase.
-- The migration is now registered as `20260525013516 / add_weather_context_columns`.
+- The migration is registered as `20260525013516 / add_weather_context_columns`.
+- The `public.air_quality_readings` table contains the new nullable canonical `weather_*` columns.
+- Legacy AQI contract columns remain present.
+- Weather range checks appear as `NOT VALID`, as intended.
+- No backfill was performed as part of this apply.
 
-Not confirmed in this evidence:
+Still not confirmed in this evidence:
 
-- Column-by-column catalog state.
-- Constraint-by-constraint catalog state.
-- Constraint validation state.
+- Full `pg_constraint` row-by-row catalog output.
+- Whether every named constraint exactly matches the repository migration name list.
 
-Reason: direct SQL read-only verification through the connector was blocked by the safety layer, even for trivial `select` checks. This evidence therefore relies on Supabase migration apply success and migration history only.
+Reason: direct SQL read-only verification through the connector remained blocked, but structured table inspection provided enough catalog evidence to confirm the schema change at table level.
 
 ## No-write boundaries preserved
 
@@ -90,10 +147,10 @@ This apply did not include:
 
 Before backfill, RPC exposure, frontend consumption, or constraint validation, create separate stories for:
 
-1. Post-apply read-only catalog verification through an approved read-only path.
-2. Weather write-path implementation using Open-Meteo as separate weather provider.
-3. Dry-run and then controlled weather backfill if explicitly approved.
-4. Additive RPC/frontend adoption after data is verified.
+1. Weather write-path implementation using Open-Meteo as separate weather provider.
+2. Dry-run and then controlled weather backfill if explicitly approved.
+3. Additive RPC/frontend adoption after data is verified.
+4. Full named-constraint catalog verification if an approved read-only SQL path is available.
 5. Constraint validation only after production evidence confirms data quality.
 
 ## Rollback expectations
