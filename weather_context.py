@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -102,16 +103,31 @@ def validate_weather_context(context: dict[str, Any]) -> list[str]:
     wind_direction = context.get("weather_wind_direction_deg")
     wind_gust = context.get("weather_wind_gust_kmh")
 
-    if temperature is not None and not (-50 <= temperature <= 60):
-        errors.append("weather_temperature_c_out_of_range")
-    if humidity is not None and not (0 <= humidity <= 100):
-        errors.append("weather_humidity_percent_out_of_range")
-    if wind_speed is not None and wind_speed < 0:
-        errors.append("weather_wind_speed_kmh_negative")
-    if wind_direction is not None and not (0 <= wind_direction <= 360):
-        errors.append("weather_wind_direction_deg_out_of_range")
-    if wind_gust is not None and wind_gust < 0:
-        errors.append("weather_wind_gust_kmh_negative")
+    if temperature is not None:
+        if not is_finite_number(temperature):
+            errors.append("weather_temperature_c_not_finite")
+        elif not (-50 <= temperature <= 60):
+            errors.append("weather_temperature_c_out_of_range")
+    if humidity is not None:
+        if not is_finite_number(humidity):
+            errors.append("weather_humidity_percent_not_finite")
+        elif not (0 <= humidity <= 100):
+            errors.append("weather_humidity_percent_out_of_range")
+    if wind_speed is not None:
+        if not is_finite_number(wind_speed):
+            errors.append("weather_wind_speed_kmh_not_finite")
+        elif wind_speed < 0:
+            errors.append("weather_wind_speed_kmh_negative")
+    if wind_direction is not None:
+        if not is_finite_number(wind_direction):
+            errors.append("weather_wind_direction_deg_not_finite")
+        elif not (0 <= wind_direction <= 360):
+            errors.append("weather_wind_direction_deg_out_of_range")
+    if wind_gust is not None:
+        if not is_finite_number(wind_gust):
+            errors.append("weather_wind_gust_kmh_not_finite")
+        elif wind_gust < 0:
+            errors.append("weather_wind_gust_kmh_negative")
 
     has_weather_value = any(
         value is not None
@@ -125,15 +141,23 @@ def validate_weather_context(context: dict[str, Any]) -> list[str]:
     return errors
 
 
+def is_finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def parse_number(value: Any) -> int | float | None:
     if isinstance(value, bool) or value is None:
         return None
     if isinstance(value, (int, float)):
+        if not math.isfinite(value):
+            return None
         return value
     if isinstance(value, str):
         try:
             parsed = float(value)
         except ValueError:
+            return None
+        if not math.isfinite(parsed):
             return None
         return int(parsed) if parsed.is_integer() else parsed
     return None
