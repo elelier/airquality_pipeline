@@ -34,6 +34,19 @@ The migration preserves all existing returned columns and appends these nullable
 
 The RPC intentionally does not expose `weather_source_payload`.
 
+## Migration strategy
+
+PostgreSQL does not allow changing an existing function return signature with `create or replace function` alone.
+
+Because this migration appends returned columns to `get_latest_air_quality_per_city()`, it intentionally uses:
+
+```sql
+drop function if exists public.get_latest_air_quality_per_city();
+create function public.get_latest_air_quality_per_city() ...
+```
+
+This is required so the updated `RETURNS TABLE` signature can be recreated cleanly.
+
 ## Compatibility
 
 Existing columns remain in the same order before the appended weather fields:
