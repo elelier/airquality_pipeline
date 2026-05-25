@@ -35,9 +35,6 @@ alter table public.air_quality_readings
   add column if not exists weather_source_payload jsonb,
   add column if not exists weather_backfilled_at timestamptz;
 
-comment on column public.air_quality_readings.reading_timestamp is
-  'AQI provider measurement timestamp. Do not replace with weather bucket time.';
-
 comment on column public.air_quality_readings.weather_temperature_c is
   'Canonical weather-context temperature in Celsius from the selected weather provider bucket. Legacy temperature_c is not canonical weather.';
 
