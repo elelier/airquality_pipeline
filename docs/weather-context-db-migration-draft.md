@@ -25,8 +25,8 @@ Before creating this draft, the repo was checked for a clear migration conventio
 
 - `supabase/migrations`: not present.
 - `migrations`: not present.
-- `sql`: not present.
-- Existing weather contract docs only included conceptual SQL, not an applied migration convention.
+- No top-level `sql/` migration directory or versioned SQL migration convention was present.
+- Existing weather contract docs only included conceptual SQL and documentation examples, not an applied migration convention.
 
 Decision: do **not** invent a production migration structure in this story. Store the draft under `docs/sql/` until a future DB story defines the migration workflow.
 
