@@ -3,6 +3,7 @@ import logging
 from supabase_client import get_supabase_client, log_pipeline_event
 from utils import validate_reading_payload
 
+
 def update_city(fetch_or_skip_result: dict) -> dict:
     logging.info("--- Iniciando update_city.py ---")
 
@@ -38,6 +39,8 @@ def update_city(fetch_or_skip_result: dict) -> dict:
                     }
                     logging.warning(f"Lectura rechazada por validacion: {validation_errors}")
                 else:
+                    weather_context = data.get('weather_context') or {}
+                    has_valid_weather_context = weather_context.get('status') == 'success'
                     reading_data_to_insert = {
                         'city_id': data['city_id'],
                         'reading_timestamp': reading_ts,
@@ -51,6 +54,18 @@ def update_city(fetch_or_skip_result: dict) -> dict:
                         'weather_icon': data.get('clima', {}).get('icono_clima'),
                         'raw_api_response': data.get('api_raw_response')
                     }
+
+                    if has_valid_weather_context:
+                        reading_data_to_insert.update({
+                            'weather_temperature_c': weather_context.get('weather_temperature_c'),
+                            'weather_humidity_percent': weather_context.get('weather_humidity_percent'),
+                            'weather_wind_speed_kmh': weather_context.get('weather_wind_speed_kmh'),
+                            'weather_wind_direction_deg': weather_context.get('weather_wind_direction_deg'),
+                            'weather_wind_gust_kmh': weather_context.get('weather_wind_gust_kmh'),
+                            'weather_provider': weather_context.get('weather_provider'),
+                            'weather_timestamp': weather_context.get('weather_timestamp'),
+                            'weather_source_payload': weather_context.get('weather_source_payload'),
+                        })
 
                     city_status_to_update = {
                         'last_successful_update_at': datetime.utcnow().isoformat(),
@@ -131,4 +146,3 @@ def update_city(fetch_or_skip_result: dict) -> dict:
     logging.info("--- Fin update_city.py ---")
     logging.info(result)
     return result
-
