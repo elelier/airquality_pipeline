@@ -96,6 +96,10 @@ Before any future apply story:
 6. Confirm rollback expectations for the exact target state.
 7. Capture post-apply evidence after execution.
 
+## Validation note
+
+This promotion remains file-only until a separate apply story explicitly authorizes database execution.
+
 ## Rollback for this story
 
 Revert the PR that added the versioned migration file and this document.
