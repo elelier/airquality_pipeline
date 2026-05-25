@@ -1,4 +1,6 @@
-create or replace function public.get_latest_air_quality_per_city()
+drop function if exists public.get_latest_air_quality_per_city();
+
+create function public.get_latest_air_quality_per_city()
 returns table(
   city_id bigint,
   city_name text,
