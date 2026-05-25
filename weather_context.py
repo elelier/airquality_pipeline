@@ -47,10 +47,12 @@ def fetch_weather_context(lat: Any, lon: Any) -> dict[str, Any]:
         )
         logging.info("[Weather] HTTP GET status=%s", response.status_code)
         response.raise_for_status()
+        payload = response.json()
+    except ValueError as error:
+        return build_weather_error("invalid_json", str(error))
     except Exception as error:
         return build_weather_error("fetch_failed", str(error))
 
-    payload = response.json()
     if not isinstance(payload, dict):
         return build_weather_error("invalid_payload", "Weather payload is not an object.")
 
