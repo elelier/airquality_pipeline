@@ -194,7 +194,11 @@ def main(force_update=False) -> dict:
 
             fetch_result = fetch_provider_air_quality(provider, city, env)
             fetch_result["city_id"] = city["id"]
-            fetch_result = enrich_with_weather_context(fetch_result)
+            fetch_result = enrich_with_weather_context(
+                fetch_result,
+                canonical_lat=city.get("latitude"),
+                canonical_lon=city.get("longitude"),
+            )
             weather_context = fetch_result.get("weather_context") or {}
             if weather_context.get("status") == "success":
                 summary["weather_context_success"] += 1

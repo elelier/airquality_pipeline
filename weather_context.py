@@ -17,12 +17,23 @@ CURRENT_FIELDS = (
 )
 
 
-def enrich_with_weather_context(reading: dict[str, Any]) -> dict[str, Any]:
+def enrich_with_weather_context(
+    reading: dict[str, Any],
+    canonical_lat: Any = None,
+    canonical_lon: Any = None,
+) -> dict[str, Any]:
     if reading.get("status") != "success":
         return reading
 
-    coordinates = reading.get("coordenadas") if isinstance(reading.get("coordenadas"), dict) else {}
-    context = fetch_weather_context(coordinates.get("lat"), coordinates.get("lon"))
+    reading_coordinates = (
+        reading.get("coordenadas")
+        if isinstance(reading.get("coordenadas"), dict)
+        else {}
+    )
+    lat = canonical_lat if parse_number(canonical_lat) is not None else reading_coordinates.get("lat")
+    lon = canonical_lon if parse_number(canonical_lon) is not None else reading_coordinates.get("lon")
+
+    context = fetch_weather_context(lat, lon)
     return {**reading, "weather_context": context}
 
 
