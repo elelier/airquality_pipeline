@@ -2,11 +2,40 @@ from unittest.mock import MagicMock, patch
 
 from weather_context import (
     build_weather_error,
+    enrich_with_weather_context,
     fetch_weather_context,
     normalize_weather_payload,
     parse_int,
     parse_number,
 )
+
+
+def test_enrich_weather_context_prefers_canonical_city_coordinates():
+    reading = {
+        "status": "success",
+        "coordenadas": {"lat": 1, "lon": 2},
+    }
+    expected_context = {"status": "success", "weather_provider": "open-meteo"}
+
+    with patch("weather_context.fetch_weather_context", return_value=expected_context) as fetcher:
+        result = enrich_with_weather_context(reading, canonical_lat=25.67, canonical_lon=-100.31)
+
+    assert result["weather_context"] == expected_context
+    fetcher.assert_called_once_with(25.67, -100.31)
+
+
+def test_enrich_weather_context_falls_back_to_reading_coordinates():
+    reading = {
+        "status": "success",
+        "coordenadas": {"lat": 25.67, "lon": -100.31},
+    }
+    expected_context = {"status": "success", "weather_provider": "open-meteo"}
+
+    with patch("weather_context.fetch_weather_context", return_value=expected_context) as fetcher:
+        result = enrich_with_weather_context(reading)
+
+    assert result["weather_context"] == expected_context
+    fetcher.assert_called_once_with(25.67, -100.31)
 
 
 def test_normalize_weather_payload_success():
