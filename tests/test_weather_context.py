@@ -1,6 +1,12 @@
 from unittest.mock import MagicMock, patch
 
-from weather_context import build_weather_error, fetch_weather_context, normalize_weather_payload
+from weather_context import (
+    build_weather_error,
+    fetch_weather_context,
+    normalize_weather_payload,
+    parse_int,
+    parse_number,
+)
 
 
 def test_normalize_weather_payload_success():
@@ -46,6 +52,37 @@ def test_normalize_weather_payload_rejects_invalid_range():
     assert result["status"] == "error"
     assert result["errorType"] == "validation_failed"
     assert "weather_temperature_c_out_of_range" in result["message"]
+
+
+def test_normalize_weather_payload_drops_non_finite_values_before_success():
+    payload = {
+        "current": {
+            "time": "2026-05-25T01:00",
+            "temperature_2m": float("nan"),
+            "relative_humidity_2m": float("inf"),
+            "wind_speed_10m": float("nan"),
+            "wind_direction_10m": float("inf"),
+            "wind_gusts_10m": float("inf"),
+        }
+    }
+
+    result = normalize_weather_payload(payload)
+
+    assert result["status"] == "success"
+    assert result["weather_temperature_c"] is None
+    assert result["weather_humidity_percent"] is None
+    assert result["weather_wind_speed_kmh"] is None
+    assert result["weather_wind_direction_deg"] is None
+    assert result["weather_wind_gust_kmh"] is None
+
+
+def test_parse_helpers_return_none_for_non_finite_values():
+    assert parse_number(float("nan")) is None
+    assert parse_number(float("inf")) is None
+    assert parse_number("nan") is None
+    assert parse_number("inf") is None
+    assert parse_int(float("nan")) is None
+    assert parse_int(float("inf")) is None
 
 
 def test_fetch_weather_context_handles_non_json_response():
