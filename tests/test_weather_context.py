@@ -1,4 +1,6 @@
-from weather_context import normalize_weather_payload, build_weather_error
+from unittest.mock import MagicMock, patch
+
+from weather_context import build_weather_error, fetch_weather_context, normalize_weather_payload
 
 
 def test_normalize_weather_payload_success():
@@ -44,6 +46,20 @@ def test_normalize_weather_payload_rejects_invalid_range():
     assert result["status"] == "error"
     assert result["errorType"] == "validation_failed"
     assert "weather_temperature_c_out_of_range" in result["message"]
+
+
+def test_fetch_weather_context_handles_non_json_response():
+    response = MagicMock()
+    response.status_code = 200
+    response.raise_for_status.return_value = None
+    response.json.side_effect = ValueError("not json")
+
+    with patch("weather_context.requests.get", return_value=response):
+        result = fetch_weather_context(25.67, -100.31)
+
+    assert result["status"] == "error"
+    assert result["provider"] == "open-meteo"
+    assert result["errorType"] == "invalid_json"
 
 
 def test_build_weather_error_shape():
