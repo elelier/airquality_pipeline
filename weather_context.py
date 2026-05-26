@@ -1,5 +1,6 @@
 import logging
 import math
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -8,6 +9,8 @@ import requests
 PROVIDER_NAME = "open-meteo"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT_SECONDS = 20
+MAX_FETCH_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 2
 CURRENT_FIELDS = (
     "temperature_2m",
     "relative_humidity_2m",
@@ -43,6 +46,33 @@ def fetch_weather_context(lat: Any, lon: Any) -> dict[str, Any]:
     if parsed_lat is None or parsed_lon is None:
         return build_weather_error("missing_coordinates", "Weather context requires lat/lon.")
 
+    last_error: dict[str, Any] | None = None
+    for attempt in range(1, MAX_FETCH_ATTEMPTS + 1):
+        result = fetch_weather_context_once(parsed_lat, parsed_lon, attempt)
+        if result.get("status") == "success":
+            return result
+
+        last_error = result
+        should_retry = bool(result.get("retryable"))
+        if not should_retry or attempt >= MAX_FETCH_ATTEMPTS:
+            return result
+
+        logging.warning(
+            "[Weather] Retrying Open-Meteo fetch after %s/%s retryable failure: %s",
+            attempt,
+            MAX_FETCH_ATTEMPTS,
+            result.get("errorType"),
+        )
+        time.sleep(RETRY_DELAY_SECONDS)
+
+    return last_error or build_weather_error("fetch_failed", "Unknown weather fetch failure.")
+
+
+def fetch_weather_context_once(
+    parsed_lat: int | float,
+    parsed_lon: int | float,
+    attempt: int,
+) -> dict[str, Any]:
     try:
         response = requests.get(
             FORECAST_URL,
@@ -57,18 +87,48 @@ def fetch_weather_context(lat: Any, lon: Any) -> dict[str, Any]:
             },
             timeout=TIMEOUT_SECONDS,
         )
-        logging.info("[Weather] HTTP GET status=%s", response.status_code)
+        status_code = response.status_code
+        logging.info(
+            "[Weather] HTTP GET attempt=%s/%s status=%s",
+            attempt,
+            MAX_FETCH_ATTEMPTS,
+            status_code,
+        )
+        if should_retry_status(status_code):
+            return build_weather_error(
+                "fetch_failed",
+                f"Retryable HTTP status {status_code}",
+                retryable=True,
+            )
+        if is_nonretryable_client_error_status(status_code):
+            return build_weather_error(
+                "fetch_failed",
+                f"Non-retryable HTTP status {status_code}",
+                retryable=False,
+            )
         response.raise_for_status()
         payload = response.json()
     except ValueError as error:
         return build_weather_error("invalid_json", str(error))
     except Exception as error:
-        return build_weather_error("fetch_failed", str(error))
+        return build_weather_error("fetch_failed", str(error), retryable=True)
 
     if not isinstance(payload, dict):
         return build_weather_error("invalid_payload", "Weather payload is not an object.")
 
     return normalize_weather_payload(payload)
+
+
+def should_retry_status(status_code: int | None) -> bool:
+    if status_code is None:
+        return False
+    return status_code == 429 or 500 <= status_code <= 599
+
+
+def is_nonretryable_client_error_status(status_code: int | None) -> bool:
+    if status_code is None:
+        return False
+    return 400 <= status_code <= 499 and status_code != 429
 
 
 def normalize_weather_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -198,11 +258,16 @@ def normalize_timestamp(value: Any) -> str | None:
     return parsed.astimezone(timezone.utc).isoformat()
 
 
-def build_weather_error(error_type: str, message: str) -> dict[str, Any]:
+def build_weather_error(
+    error_type: str,
+    message: str,
+    retryable: bool = False,
+) -> dict[str, Any]:
     logging.warning("[Weather] %s: %s", error_type, message)
     return {
         "status": "error",
         "provider": PROVIDER_NAME,
         "errorType": error_type,
         "message": message,
+        "retryable": retryable,
     }

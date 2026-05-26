@@ -38,6 +38,66 @@ def test_enrich_weather_context_falls_back_to_reading_coordinates():
     fetcher.assert_called_once_with(25.67, -100.31)
 
 
+def test_fetch_weather_context_retries_retryable_http_failures():
+    failed_response = MagicMock()
+    failed_response.status_code = 502
+
+    success_response = MagicMock()
+    success_response.status_code = 200
+    success_response.raise_for_status.return_value = None
+    success_response.json.return_value = {
+        "current": {
+            "time": "2026-05-25T01:00",
+            "temperature_2m": 28.5,
+        }
+    }
+
+    with patch(
+        "weather_context.requests.get",
+        side_effect=[failed_response, success_response],
+    ) as get_mock, patch("weather_context.time.sleep") as sleep_mock:
+        result = fetch_weather_context(25.67, -100.31)
+
+    assert result["status"] == "success"
+    assert result["weather_temperature_c"] == 28.5
+    assert get_mock.call_count == 2
+    sleep_mock.assert_called_once()
+
+
+def test_fetch_weather_context_does_not_retry_nonretryable_http_failures():
+    response = MagicMock()
+    response.status_code = 404
+    response.raise_for_status.side_effect = RuntimeError("not found")
+
+    with patch("weather_context.requests.get", return_value=response) as get_mock, patch(
+        "weather_context.time.sleep"
+    ) as sleep_mock:
+        result = fetch_weather_context(25.67, -100.31)
+
+    assert result["status"] == "error"
+    assert result["errorType"] == "fetch_failed"
+    assert result["retryable"] is False
+    assert get_mock.call_count == 1
+    sleep_mock.assert_not_called()
+
+
+def test_fetch_weather_context_does_not_retry_deterministic_payload_errors():
+    response = MagicMock()
+    response.status_code = 200
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"current": None}
+
+    with patch("weather_context.requests.get", return_value=response) as get_mock, patch(
+        "weather_context.time.sleep"
+    ) as sleep_mock:
+        result = fetch_weather_context(25.67, -100.31)
+
+    assert result["status"] == "error"
+    assert result["errorType"] == "missing_current"
+    assert get_mock.call_count == 1
+    sleep_mock.assert_not_called()
+
+
 def test_normalize_weather_payload_success():
     payload = {
         "current": {
@@ -120,12 +180,13 @@ def test_fetch_weather_context_handles_non_json_response():
     response.raise_for_status.return_value = None
     response.json.side_effect = ValueError("not json")
 
-    with patch("weather_context.requests.get", return_value=response):
+    with patch("weather_context.requests.get", return_value=response), patch("weather_context.time.sleep"):
         result = fetch_weather_context(25.67, -100.31)
 
     assert result["status"] == "error"
     assert result["provider"] == "open-meteo"
     assert result["errorType"] == "invalid_json"
+    assert result["retryable"] is False
 
 
 def test_build_weather_error_shape():
@@ -136,4 +197,5 @@ def test_build_weather_error_shape():
         "provider": "open-meteo",
         "errorType": "missing_coordinates",
         "message": "lat/lon required",
+        "retryable": False,
     }
