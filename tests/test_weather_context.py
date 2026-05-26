@@ -38,6 +38,33 @@ def test_enrich_weather_context_falls_back_to_reading_coordinates():
     fetcher.assert_called_once_with(25.67, -100.31)
 
 
+def test_fetch_weather_context_retries_transient_failures():
+    failed_response = MagicMock()
+    failed_response.status_code = 502
+    failed_response.raise_for_status.side_effect = RuntimeError("bad gateway")
+
+    success_response = MagicMock()
+    success_response.status_code = 200
+    success_response.raise_for_status.return_value = None
+    success_response.json.return_value = {
+        "current": {
+            "time": "2026-05-25T01:00",
+            "temperature_2m": 28.5,
+        }
+    }
+
+    with patch(
+        "weather_context.requests.get",
+        side_effect=[failed_response, success_response],
+    ) as get_mock, patch("weather_context.time.sleep") as sleep_mock:
+        result = fetch_weather_context(25.67, -100.31)
+
+    assert result["status"] == "success"
+    assert result["weather_temperature_c"] == 28.5
+    assert get_mock.call_count == 2
+    sleep_mock.assert_called_once()
+
+
 def test_normalize_weather_payload_success():
     payload = {
         "current": {
@@ -120,7 +147,7 @@ def test_fetch_weather_context_handles_non_json_response():
     response.raise_for_status.return_value = None
     response.json.side_effect = ValueError("not json")
 
-    with patch("weather_context.requests.get", return_value=response):
+    with patch("weather_context.requests.get", return_value=response), patch("weather_context.time.sleep"):
         result = fetch_weather_context(25.67, -100.31)
 
     assert result["status"] == "error"
