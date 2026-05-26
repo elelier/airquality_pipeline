@@ -65,6 +65,23 @@ def test_fetch_weather_context_retries_transient_failures():
     sleep_mock.assert_called_once()
 
 
+def test_fetch_weather_context_does_not_retry_deterministic_payload_errors():
+    response = MagicMock()
+    response.status_code = 200
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"current": None}
+
+    with patch("weather_context.requests.get", return_value=response) as get_mock, patch(
+        "weather_context.time.sleep"
+    ) as sleep_mock:
+        result = fetch_weather_context(25.67, -100.31)
+
+    assert result["status"] == "error"
+    assert result["errorType"] == "missing_current"
+    assert get_mock.call_count == 1
+    sleep_mock.assert_not_called()
+
+
 def test_normalize_weather_payload_success():
     payload = {
         "current": {
