@@ -1,5 +1,6 @@
 import logging
 import math
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -8,6 +9,8 @@ import requests
 PROVIDER_NAME = "open-meteo"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT_SECONDS = 20
+MAX_FETCH_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 2
 CURRENT_FIELDS = (
     "temperature_2m",
     "relative_humidity_2m",
@@ -43,6 +46,30 @@ def fetch_weather_context(lat: Any, lon: Any) -> dict[str, Any]:
     if parsed_lat is None or parsed_lon is None:
         return build_weather_error("missing_coordinates", "Weather context requires lat/lon.")
 
+    last_error: dict[str, Any] | None = None
+    for attempt in range(1, MAX_FETCH_ATTEMPTS + 1):
+        result = fetch_weather_context_once(parsed_lat, parsed_lon, attempt)
+        if result.get("status") == "success":
+            return result
+
+        last_error = result
+        if attempt < MAX_FETCH_ATTEMPTS:
+            logging.warning(
+                "[Weather] Retrying Open-Meteo fetch after %s/%s failure: %s",
+                attempt,
+                MAX_FETCH_ATTEMPTS,
+                result.get("errorType"),
+            )
+            time.sleep(RETRY_DELAY_SECONDS)
+
+    return last_error or build_weather_error("fetch_failed", "Unknown weather fetch failure.")
+
+
+def fetch_weather_context_once(
+    parsed_lat: int | float,
+    parsed_lon: int | float,
+    attempt: int,
+) -> dict[str, Any]:
     try:
         response = requests.get(
             FORECAST_URL,
@@ -57,7 +84,12 @@ def fetch_weather_context(lat: Any, lon: Any) -> dict[str, Any]:
             },
             timeout=TIMEOUT_SECONDS,
         )
-        logging.info("[Weather] HTTP GET status=%s", response.status_code)
+        logging.info(
+            "[Weather] HTTP GET attempt=%s/%s status=%s",
+            attempt,
+            MAX_FETCH_ATTEMPTS,
+            response.status_code,
+        )
         response.raise_for_status()
         payload = response.json()
     except ValueError as error:
