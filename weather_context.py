@@ -11,7 +11,6 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT_SECONDS = 20
 MAX_FETCH_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 2
-TRANSIENT_FETCH_ERROR_TYPES = {"fetch_failed"}
 CURRENT_FIELDS = (
     "temperature_2m",
     "relative_humidity_2m",
@@ -54,16 +53,15 @@ def fetch_weather_context(lat: Any, lon: Any) -> dict[str, Any]:
             return result
 
         last_error = result
-        error_type = result.get("errorType")
-        should_retry = error_type in TRANSIENT_FETCH_ERROR_TYPES
+        should_retry = bool(result.get("retryable"))
         if not should_retry or attempt >= MAX_FETCH_ATTEMPTS:
             return result
 
         logging.warning(
-            "[Weather] Retrying Open-Meteo fetch after %s/%s transient failure: %s",
+            "[Weather] Retrying Open-Meteo fetch after %s/%s retryable failure: %s",
             attempt,
             MAX_FETCH_ATTEMPTS,
-            error_type,
+            result.get("errorType"),
         )
         time.sleep(RETRY_DELAY_SECONDS)
 
@@ -95,17 +93,29 @@ def fetch_weather_context_once(
             MAX_FETCH_ATTEMPTS,
             response.status_code,
         )
+        if should_retry_status(response.status_code):
+            return build_weather_error(
+                "fetch_failed",
+                f"Retryable HTTP status {response.status_code}",
+                retryable=True,
+            )
         response.raise_for_status()
         payload = response.json()
     except ValueError as error:
         return build_weather_error("invalid_json", str(error))
     except Exception as error:
-        return build_weather_error("fetch_failed", str(error))
+        return build_weather_error("fetch_failed", str(error), retryable=True)
 
     if not isinstance(payload, dict):
         return build_weather_error("invalid_payload", "Weather payload is not an object.")
 
     return normalize_weather_payload(payload)
+
+
+def should_retry_status(status_code: int | None) -> bool:
+    if status_code is None:
+        return False
+    return status_code == 429 or 500 <= status_code <= 599
 
 
 def normalize_weather_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -235,11 +245,16 @@ def normalize_timestamp(value: Any) -> str | None:
     return parsed.astimezone(timezone.utc).isoformat()
 
 
-def build_weather_error(error_type: str, message: str) -> dict[str, Any]:
+def build_weather_error(
+    error_type: str,
+    message: str,
+    retryable: bool = False,
+) -> dict[str, Any]:
     logging.warning("[Weather] %s: %s", error_type, message)
     return {
         "status": "error",
         "provider": PROVIDER_NAME,
         "errorType": error_type,
         "message": message,
+        "retryable": retryable,
     }
