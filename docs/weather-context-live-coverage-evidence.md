@@ -12,9 +12,8 @@ This document records read-only live evidence for canonical Open-Meteo weather-c
 
 - PR #23: `feat: add Open-Meteo weather context write path`
 - PR #26: `fix: use canonical city coordinates for weather context`
-- PR #27: `fix: improve retry handling`
 
-The latest active-city readings are post-merge and confirm that AQI inserts continue. Weather context coverage is real but still partial.
+The captured latest active-city readings were created around `2026-05-26 04:55..04:57 UTC`, which is after PR #26 merged and before PR #27 (`fix: improve retry handling`) merged. This evidence confirms post-coordinate-fix coverage and AQI insert safety, but it does not validate post-PR-27 retry behavior. Weather context coverage is real but still partial.
 
 Result summary:
 
@@ -58,7 +57,7 @@ The evidence checks the latest reading for each active city and asks:
 2. Does every latest reading still have AQI?
 3. Which latest readings include canonical Open-Meteo fields?
 4. Which cities are still missing canonical weather context?
-5. Are the latest rows newer than PR #26 and PR #27 merge times?
+5. Do the latest rows fall after PR #26 and before PR #27, making this a coordinate-fix coverage check rather than a retry-fix validation check?
 
 PR merge reference:
 
