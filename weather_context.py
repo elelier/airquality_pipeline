@@ -11,6 +11,7 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT_SECONDS = 20
 MAX_FETCH_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 2
+TRANSIENT_FETCH_ERROR_TYPES = {"fetch_failed"}
 CURRENT_FIELDS = (
     "temperature_2m",
     "relative_humidity_2m",
@@ -53,14 +54,18 @@ def fetch_weather_context(lat: Any, lon: Any) -> dict[str, Any]:
             return result
 
         last_error = result
-        if attempt < MAX_FETCH_ATTEMPTS:
-            logging.warning(
-                "[Weather] Retrying Open-Meteo fetch after %s/%s failure: %s",
-                attempt,
-                MAX_FETCH_ATTEMPTS,
-                result.get("errorType"),
-            )
-            time.sleep(RETRY_DELAY_SECONDS)
+        error_type = result.get("errorType")
+        should_retry = error_type in TRANSIENT_FETCH_ERROR_TYPES
+        if not should_retry or attempt >= MAX_FETCH_ATTEMPTS:
+            return result
+
+        logging.warning(
+            "[Weather] Retrying Open-Meteo fetch after %s/%s transient failure: %s",
+            attempt,
+            MAX_FETCH_ATTEMPTS,
+            error_type,
+        )
+        time.sleep(RETRY_DELAY_SECONDS)
 
     return last_error or build_weather_error("fetch_failed", "Unknown weather fetch failure.")
 
