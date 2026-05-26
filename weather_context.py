@@ -87,17 +87,24 @@ def fetch_weather_context_once(
             },
             timeout=TIMEOUT_SECONDS,
         )
+        status_code = response.status_code
         logging.info(
             "[Weather] HTTP GET attempt=%s/%s status=%s",
             attempt,
             MAX_FETCH_ATTEMPTS,
-            response.status_code,
+            status_code,
         )
-        if should_retry_status(response.status_code):
+        if should_retry_status(status_code):
             return build_weather_error(
                 "fetch_failed",
-                f"Retryable HTTP status {response.status_code}",
+                f"Retryable HTTP status {status_code}",
                 retryable=True,
+            )
+        if is_nonretryable_client_error_status(status_code):
+            return build_weather_error(
+                "fetch_failed",
+                f"Non-retryable HTTP status {status_code}",
+                retryable=False,
             )
         response.raise_for_status()
         payload = response.json()
@@ -116,6 +123,12 @@ def should_retry_status(status_code: int | None) -> bool:
     if status_code is None:
         return False
     return status_code == 429 or 500 <= status_code <= 599
+
+
+def is_nonretryable_client_error_status(status_code: int | None) -> bool:
+    if status_code is None:
+        return False
+    return 400 <= status_code <= 499 and status_code != 429
 
 
 def normalize_weather_payload(payload: dict[str, Any]) -> dict[str, Any]:
