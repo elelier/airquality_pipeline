@@ -1,9 +1,10 @@
 # Weather Context Live Coverage Evidence — MtyRespira
 
-Status: partial live coverage evidence  
+Status: complete follow-up live coverage evidence  
 Scope: `elelier/airquality_pipeline`  
 Target DB: `monterrey-respira-db` (`xjekikweaiddfwjjaqbd`)  
-Review timestamp: 2026-05-26 08:20 UTC  
+Initial review timestamp: 2026-05-26 08:20 UTC  
+Follow-up review timestamp: 2026-05-29 00:10 UTC  
 Decision type: Data QA / Architecture validation / Docs
 
 ## Summary
@@ -12,21 +13,24 @@ This document records read-only live evidence for canonical Open-Meteo weather-c
 
 - PR #23: `feat: add Open-Meteo weather context write path`
 - PR #26: `fix: use canonical city coordinates for weather context`
+- PR #27: `fix: improve retry handling`
 
-The captured latest active-city readings were created around `2026-05-26 04:55..04:57 UTC`, which is after PR #26 merged and before PR #27 (`fix: improve retry handling`) merged. This evidence confirms post-coordinate-fix coverage and AQI insert safety, but it does not validate post-PR-27 retry behavior. Weather context coverage is real but still partial.
+Initial evidence captured from latest active-city readings created around `2026-05-26 04:55..04:57 UTC` showed partial coverage: 5 of 9 latest active-city readings had canonical Open-Meteo context. Those rows were after PR #26 merged and before PR #27 merged, so they confirmed post-coordinate-fix coverage but did not validate post-PR-27 retry behavior.
+
+Follow-up evidence captured on `2026-05-29` from latest active-city readings created around `2026-05-29 00:00..00:02 UTC` confirms complete canonical Open-Meteo coverage across all active cities.
 
 Result summary:
 
-| Metric | Result |
-| --- | ---: |
-| Active cities checked | 9 |
-| Active cities with latest reading | 9 |
-| Latest readings with AQI | 9 |
-| Latest readings with `weather_provider = 'open-meteo'` | 5 |
-| Latest readings with complete core weather context | 5 |
-| Active cities missing canonical weather context | 4 |
+| Metric | Initial result | Follow-up result |
+| --- | ---: | ---: |
+| Active cities checked | 9 | 9 |
+| Active cities with latest reading | 9 | 9 |
+| Latest readings with AQI | 9 | 9 |
+| Latest readings with `weather_provider = 'open-meteo'` | 5 | 9 |
+| Latest readings with complete core weather context | 5 | 9 |
+| Active cities missing canonical weather context | 4 | 0 |
 
-Decision: **partial coverage — investigate missing weather context by city before frontend adoption or backfill.**
+Decision: **initial evidence was partial; follow-up evidence confirms complete 9/9 canonical Open-Meteo coverage.**
 
 ## Scope
 
@@ -57,7 +61,7 @@ The evidence checks the latest reading for each active city and asks:
 2. Does every latest reading still have AQI?
 3. Which latest readings include canonical Open-Meteo fields?
 4. Which cities are still missing canonical weather context?
-5. Do the latest rows fall after PR #26 and before PR #27, making this a coordinate-fix coverage check rather than a retry-fix validation check?
+5. Do follow-up latest rows confirm complete post-PR-27 Open-Meteo coverage?
 
 PR merge reference:
 
@@ -66,7 +70,9 @@ PR merge reference:
 | PR #26 | 2026-05-25 20:11:50 UTC |
 | PR #27 | 2026-05-26 07:25:52 UTC |
 
-The latest rows captured below were created around `2026-05-26 04:55..04:57 UTC`, which is after PR #26 but before PR #27. Therefore this evidence confirms post-coordinate-fix coverage, but not yet a post-PR-27 scheduled insert. The retry fix should still be verified on a later post-PR-27 run if retry behavior is specifically under review.
+The initial rows captured below were created around `2026-05-26 04:55..04:57 UTC`, which is after PR #26 but before PR #27. Therefore the initial evidence confirmed post-coordinate-fix coverage, but not a post-PR-27 scheduled insert.
+
+The follow-up rows captured below were created around `2026-05-29 00:00..00:02 UTC`, which is after PR #27. Therefore this follow-up evidence confirms complete current canonical Open-Meteo coverage for latest active-city readings.
 
 ## Read-only summary query
 
@@ -110,7 +116,7 @@ select
 from latest;
 ```
 
-Result:
+Initial result:
 
 ```json
 [
@@ -126,7 +132,7 @@ Result:
 ]
 ```
 
-## Coverage by city
+## Initial coverage by city — 2026-05-26
 
 | City | Created at UTC | AQI | Main pollutant | Weather provider | Core weather fields |
 | --- | --- | ---: | --- | --- | --- |
@@ -140,7 +146,7 @@ Result:
 | San Pedro Garza Garcia | 2026-05-26 04:57:24 | 46 | `pm25` | `open-meteo` | complete |
 | Santa Catarina | 2026-05-26 04:55:50 | 42 | `pm25` | `open-meteo` | complete |
 
-Cities with complete canonical weather context:
+Initial cities with complete canonical weather context:
 
 - Garcia
 - General Escobedo
@@ -148,87 +154,105 @@ Cities with complete canonical weather context:
 - San Pedro Garza Garcia
 - Santa Catarina
 
-Cities still missing canonical weather context on latest reading:
+Initial cities missing canonical weather context on latest reading:
 
 - Cadereyta Jimenez
 - Ciudad Benito Juárez
 - Monterrey
 - San Nicolas de los Garza
 
+## Follow-up evidence — 2026-05-29
+
+Read-only summary result:
+
+```json
+[
+  {
+    "active_cities": 9,
+    "active_cities_with_latest_reading": 9,
+    "latest_readings_with_aqi": 9,
+    "latest_readings_with_open_meteo": 9,
+    "latest_readings_with_complete_core_weather": 9,
+    "newest_created_at": "2026-05-29 00:02:41.016918+00",
+    "oldest_latest_created_at": "2026-05-29 00:00:24.009169+00"
+  }
+]
+```
+
+Follow-up coverage by city:
+
+| City | Created at UTC | Reading timestamp UTC | AQI | Main pollutant | Weather provider | Temperature C | Humidity % | Wind km/h | Wind direction deg | Gust km/h | Weather timestamp UTC | Core weather fields |
+| --- | --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| Cadereyta Jimenez | 2026-05-29 00:01:14 | 2026-05-28 22:00:00 | 42 | `pm25` | `open-meteo` | 31.6 | 51 | 15.3 | 117 | 20.9 | 2026-05-29 00:00:00 | complete |
+| Ciudad Benito Juárez | 2026-05-29 00:02:09 | 2026-05-28 22:00:00 | 28 | `o3` | `open-meteo` | 31.3 | 52 | 18.2 | 120 | 22.7 | 2026-05-29 00:00:00 | complete |
+| Garcia | 2026-05-29 00:01:24 | 2026-05-28 22:00:00 | 47 | `o3` | `open-meteo` | 30.1 | 50 | 30.9 | 107 | 38.9 | 2026-05-29 00:00:00 | complete |
+| General Escobedo | 2026-05-29 00:00:24 | 2026-05-28 22:00:00 | 55 | `pm25` | `open-meteo` | 31.1 | 50 | 20.0 | 116 | 27.4 | 2026-05-29 00:00:00 | complete |
+| Guadalupe | 2026-05-29 00:02:20 | 2026-05-28 21:00:00 | 30 | `o3` | `open-meteo` | 30.8 | 52 | 18.8 | 119 | 27.0 | 2026-05-29 00:00:00 | complete |
+| Monterrey | 2026-05-29 00:02:41 | 2026-05-28 22:00:00 | 45 | `pm25` | `open-meteo` | 30.5 | 51 | 19.1 | 106 | 26.6 | 2026-05-29 00:00:00 | complete |
+| San Nicolas de los Garza | 2026-05-29 00:01:03 | 2026-05-28 22:00:00 | 58 | `pm25` | `open-meteo` | 31.0 | 51 | 18.4 | 116 | 27.4 | 2026-05-29 00:00:00 | complete |
+| San Pedro Garza Garcia | 2026-05-29 00:02:30 | 2026-05-28 22:00:00 | 42 | `o3` | `open-meteo` | 30.2 | 51 | 21.1 | 99 | 29.5 | 2026-05-29 00:00:00 | complete |
+| Santa Catarina | 2026-05-29 00:00:52 | 2026-05-28 22:00:00 | 34 | `pm25` | `open-meteo` | 29.8 | 52 | 21.3 | 95 | 32.0 | 2026-05-29 00:00:00 | complete |
+
+Follow-up cities with complete canonical weather context:
+
+- Cadereyta Jimenez
+- Ciudad Benito Juárez
+- Garcia
+- General Escobedo
+- Guadalupe
+- Monterrey
+- San Nicolas de los Garza
+- San Pedro Garza Garcia
+- Santa Catarina
+
+Follow-up cities missing canonical weather context on latest reading: **none**.
+
 ## AQI safety check
 
-All 9 active cities have a latest reading with non-null AQI.
+All 9 active cities have a latest reading with non-null AQI in both the initial and follow-up evidence sets.
 
 This supports the intended behavior that weather context remains separate from AQI and does not block successful AQI inserts.
-
-Observed latest AQI values remain present across both groups:
-
-- Cities with Open-Meteo context: AQI values present.
-- Cities without Open-Meteo context: AQI values present.
 
 No AQI rewrite or pollutant rewrite was performed by this evidence story.
 
 ## Weather context completeness
 
-For the 5 latest readings with `weather_provider = 'open-meteo'`, the core canonical fields were present:
+Initial evidence showed canonical Open-Meteo weather context on 5 of 9 latest active-city readings.
+
+Follow-up evidence shows canonical Open-Meteo weather context on 9 of 9 latest active-city readings, including these core canonical fields:
 
 - `weather_temperature_c`
 - `weather_humidity_percent`
 - `weather_wind_speed_kmh`
 - `weather_timestamp`
 
-Observed complete-weather examples:
-
-| City | Temperature C | Humidity % | Wind km/h | Wind direction deg | Gust km/h | Weather timestamp UTC |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Garcia | 24.5 | 73 | 29.2 | 86 | 48.6 | 2026-05-26 04:45:00 |
-| General Escobedo | 25.2 | 76 | 17.9 | 115 | 33.1 | 2026-05-26 04:45:00 |
-| Guadalupe | 25.0 | 76 | 17.6 | 125 | 33.5 | 2026-05-26 04:45:00 |
-| San Pedro Garza Garcia | 24.9 | 70 | 19.2 | 67 | 29.9 | 2026-05-26 04:45:00 |
-| Santa Catarina | 24.2 | 74 | 24.4 | 68 | 36.0 | 2026-05-26 04:45:00 |
-
-## Gaps / cities pending
-
-Coverage is not yet sufficient for frontend adoption because 4 of 9 active cities still have null canonical weather context on latest readings.
-
-Pending investigation should focus on why these cities inserted AQI successfully but did not persist weather context:
-
-- Cadereyta Jimenez
-- Ciudad Benito Juárez
-- Monterrey
-- San Nicolas de los Garza
-
-Likely investigation areas for a future runtime/debug story:
-
-- Confirm whether canonical `cities.latitude` and `cities.longitude` are present and parseable for each missing city.
-- Inspect pipeline logs for `[Weather]` errors on these cities.
-- Confirm whether Open-Meteo returned non-retryable client errors, retryable server errors, invalid payload, validation failure, or missing coordinates.
-- Confirm whether city coordinate updates from WAQI overwrite canonical city coordinates before weather enrichment or after insert.
-- Capture a post-PR-27 run to verify the retry handling fix under current production behavior.
-
 ## Decision
 
-**Partial coverage. Do not proceed directly to frontend adoption or weather backfill.**
+**Initial evidence was partial; follow-up evidence confirms complete 9/9 canonical Open-Meteo coverage.**
 
-Open-Meteo write path is working for some cities and AQI remains safe, but coverage is incomplete across active municipalities.
+This evidence supports treating the missing-city coverage gap observed on `2026-05-26` as superseded by the `2026-05-29` read-only follow-up snapshot.
+
+This documentation update does not authorize frontend adoption, backfill, RPC changes, workflow changes, or runtime changes by itself. Those should remain separate stories with their own validation gates.
 
 ## Recommended next step
 
-Create a small runtime/Data QA investigation story:
+Use this complete-coverage evidence as an input for the next small gated story, likely one of:
 
 ```text
-Story 1.4.11 — Weather Context Missing City Diagnostics
+Story 1.4.11 — Weather Context RPC Contract Verification
 ```
 
-Suggested scope:
+or
 
-- Read-only inspect active city coordinates for missing cities.
-- Review latest workflow logs for weather error types, without exposing secrets.
-- Add non-sensitive structured logging if current logs do not identify weather failure reason per city.
-- Add tests if a deterministic bug is found.
-- No backfill, no frontend, no DDL, no RPC changes until coverage is understood.
+```text
+Story 1.4.11 — Weather Context Frontend Adoption Readiness
+```
 
-If a post-PR-27 scheduled run later reaches 9/9 Open-Meteo coverage, this document can be superseded by a new coverage evidence note and the next step may shift to RPC live apply verification or frontend adoption.
+Suggested scope for the next story:
+
+- Verify the RPC/public contract path exposes only intended weather fields.
+- Confirm UI adoption remains explicit, guarded, and truthful.
+- Avoid backfill, DDL, workflow, AQI provider, or frontend changes unless specifically scoped.
 
 ## No-write guarantees
 
@@ -250,11 +274,15 @@ No service-role guidance was added for frontend/app usage.
 
 ## Validation performed
 
-- Reviewed current pipeline README and weather-context documentation.
-- Reviewed `weather_context.py`, `main.py`, and `update_city.py` read-only to confirm intended non-blocking enrichment/write behavior.
-- Ran read-only Supabase evidence queries only.
-- Confirmed evidence output shows latest active-city rows and coverage counts.
-- Confirmed this PR is docs-only.
+- Reviewed current PR #28 state.
+- Reviewed current `docs/weather-context-live-coverage-evidence.md` from branch `docs/story-1-4-10-weather-live-coverage-evidence`.
+- Ran read-only Supabase summary evidence query only.
+- Ran read-only Supabase latest active-city details query only.
+- Confirmed follow-up evidence output shows 9 active cities.
+- Confirmed follow-up evidence output shows 9/9 latest active-city readings with AQI.
+- Confirmed follow-up evidence output shows 9/9 latest active-city readings with `weather_provider = 'open-meteo'`.
+- Confirmed follow-up evidence output shows 9/9 latest active-city readings with complete core weather context.
+- Confirmed this PR remains docs-only.
 - Confirmed no runtime files were modified.
 - Confirmed no workflow schedule files were modified.
 - Confirmed no DDL was executed.
