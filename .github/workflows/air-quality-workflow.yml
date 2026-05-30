@@ -187,14 +187,26 @@ jobs:
           WEATHER_BACKFILL_DAYS: ${{ github.event.inputs.weather_history_backfill_days }}
           WEATHER_BACKFILL_BATCH_SIZE: ${{ github.event.inputs.weather_history_backfill_batch_size }}
         run: |
-          ARGS="--days ${WEATHER_BACKFILL_DAYS} --batch-size ${WEATHER_BACKFILL_BATCH_SIZE}"
+          case "${WEATHER_BACKFILL_DAYS}" in
+            ''|*[!0-9]*) echo "weather_history_backfill_days must be numeric"; exit 1 ;;
+          esac
+          case "${WEATHER_BACKFILL_BATCH_SIZE}" in
+            ''|*[!0-9]*) echo "weather_history_backfill_batch_size must be numeric"; exit 1 ;;
+          esac
           if [ -n "${WEATHER_BACKFILL_CITY_ID}" ]; then
-            ARGS="$ARGS --city-id ${WEATHER_BACKFILL_CITY_ID}"
+            case "${WEATHER_BACKFILL_CITY_ID}" in
+              *[!0-9]*) echo "weather_history_backfill_city_id must be numeric when provided"; exit 1 ;;
+            esac
+          fi
+
+          ARGS=(--days "${WEATHER_BACKFILL_DAYS}" --batch-size "${WEATHER_BACKFILL_BATCH_SIZE}")
+          if [ -n "${WEATHER_BACKFILL_CITY_ID}" ]; then
+            ARGS+=(--city-id "${WEATHER_BACKFILL_CITY_ID}")
           fi
           if [ "${WEATHER_BACKFILL_MODE}" = "apply" ]; then
-            ARGS="$ARGS --apply"
+            ARGS+=(--apply)
           fi
-          python scripts/weather_history_backfill.py $ARGS | tee weather-history-backfill.log
+          python scripts/weather_history_backfill.py "${ARGS[@]}" | tee weather-history-backfill.log
         shell: bash
       - name: Upload weather history backfill log
         if: always()
