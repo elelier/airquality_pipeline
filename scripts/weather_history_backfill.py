@@ -9,12 +9,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Iterable
 
 import requests
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from supabase_client import get_supabase_client
 
@@ -167,7 +173,10 @@ def _list_float(values: Any, index: int) -> float | None:
     return parse_float(_list_value(values, index))
 
 
-def find_nearest_weather_hour(reading_time: datetime, hours: Iterable[WeatherHour]) -> tuple[WeatherHour | None, float | None]:
+def find_nearest_weather_hour(
+    reading_time: datetime,
+    hours: Iterable[WeatherHour],
+) -> tuple[WeatherHour | None, float | None]:
     hours_list = list(hours)
     if not hours_list:
         return None, None
