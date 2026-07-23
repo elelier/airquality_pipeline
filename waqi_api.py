@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -6,6 +7,9 @@ import requests
 
 WAQI_BASE_URL = "https://api.waqi.info/feed"
 WAQI_TIMEOUT_SECONDS = 45
+MAX_FETCH_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 2
+RETRYABLE_PAYLOAD_ERROR_TYPES = {"missing_aqi"}
 
 NUEVO_LEON_LAT_RANGE = (25.0, 26.5)
 NUEVO_LEON_LON_RANGE = (-101.0, -99.0)
@@ -119,16 +123,42 @@ def fetch_air_quality_data(api_name: str, city_id: int, waqi_api_token: str | No
     url = f"{WAQI_BASE_URL}/@{station_id}/"
 
     try:
-        response = requests.get(url, params={"token": waqi_api_token}, timeout=WAQI_TIMEOUT_SECONDS)
-        logging.info("[WAQI] HTTP GET %s status=%s", url, response.status_code)
-        response.raise_for_status()
-        raw_api_data = response.json()
-        return normalize_waqi_payload(
-            raw_api_data=raw_api_data,
-            api_name=api_name,
-            city_id=city_id,
-            station_id=station_id,
-        )
+        last_result = None
+        for attempt in range(1, MAX_FETCH_ATTEMPTS + 1):
+            response = requests.get(url, params={"token": waqi_api_token}, timeout=WAQI_TIMEOUT_SECONDS)
+            logging.info(
+                "[WAQI] HTTP GET attempt=%s/%s %s status=%s",
+                attempt,
+                MAX_FETCH_ATTEMPTS,
+                url,
+                response.status_code,
+            )
+            response.raise_for_status()
+            raw_api_data = response.json()
+            last_result = normalize_waqi_payload(
+                raw_api_data=raw_api_data,
+                api_name=api_name,
+                city_id=city_id,
+                station_id=station_id,
+            )
+
+            if (
+                last_result.get("status") == "success"
+                or last_result.get("errorType") not in RETRYABLE_PAYLOAD_ERROR_TYPES
+                or attempt >= MAX_FETCH_ATTEMPTS
+            ):
+                return last_result
+
+            logging.warning(
+                "[WAQI] Retrying station @%s after %s/%s retryable payload failure: %s",
+                station_id,
+                attempt,
+                MAX_FETCH_ATTEMPTS,
+                last_result.get("errorType"),
+            )
+            time.sleep(RETRY_DELAY_SECONDS)
+
+        return last_result
     except Exception as error:
         logging.error("[WAQI] Error al obtener datos para City ID %s (%s): %s", city_id, api_name, error)
         return build_error_result(city_id, api_name, "fetch_failed", str(error), station_id)

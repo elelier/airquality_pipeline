@@ -244,3 +244,36 @@ def test_fetch_air_quality_data_success_does_not_log_token():
     mock_get.assert_called_once()
     _, kwargs = mock_get.call_args
     assert kwargs["params"] == {"token": "secret-token"}
+
+
+def test_fetch_air_quality_data_retries_transient_missing_aqi_payload():
+    missing_aqi_response = MagicMock()
+    missing_aqi_response.status_code = 200
+    missing_aqi_response.raise_for_status.return_value = None
+    missing_aqi_response.json.return_value = {
+        "status": "ok",
+        "data": {
+            "time": {"iso": "2026-05-05T12:00:00-06:00"},
+            "city": {"geo": [25.74167, -100.30222]},
+        },
+    }
+
+    success_response = MagicMock()
+    success_response.status_code = 200
+    success_response.raise_for_status.return_value = None
+    success_response.json.return_value = SUCCESS_WAQI_PAYLOAD
+
+    with patch(
+        "waqi_api.requests.get",
+        side_effect=[missing_aqi_response, success_response],
+    ) as mock_get, patch("time.sleep") as mock_sleep:
+        result = waqi_api.fetch_air_quality_data(
+            api_name="Guadalupe",
+            city_id=7,
+            waqi_api_token="secret-token",
+        )
+
+    assert result["status"] == "success"
+    assert result["provider_station_id"] == "6494"
+    assert mock_get.call_count == 2
+    mock_sleep.assert_called_once_with(waqi_api.RETRY_DELAY_SECONDS)
