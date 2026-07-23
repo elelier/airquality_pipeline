@@ -140,7 +140,7 @@ AIR_QUALITY_PROVIDER=airvisual python main.py --force-update
 ```
 
 ### 🤖 Automatización
-El sistema está configurado para ejecutarse automáticamente cada hora a través de GitHub Actions.
+El sistema está configurado para ejecutarse automáticamente cada hora a través de GitHub Actions. También puede lanzarse manualmente desde la pestaña **Actions** para forzar actualizaciones o ejecutar tareas de mantenimiento.
 
 ## 📊 Estructura de Datos
 
