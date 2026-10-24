@@ -104,3 +104,55 @@ def test_validate_reading_payload_failure():
     result = validate_reading_payload(reading)
     assert result['valid'] is False
     assert 'aqi_us_out_of_range' in result['reasons']
+
+
+def test_validate_reading_payload_rejects_stale_measurement_timestamp():
+    reading = {
+        'reading_timestamp_iso': '2026-10-19T09:00:00-05:00',
+        'calidad_aire': {'aqi_us': 55},
+        'coordenadas': {'lat': 25.7, 'lon': -100.3},
+    }
+
+    result = validate_reading_payload(reading, now=datetime(2026, 10, 24, 14, 0, tzinfo=timezone.utc))
+
+    assert result['valid'] is False
+    assert 'stale_reading_timestamp' in result['reasons']
+
+
+def test_validate_reading_payload_accepts_recent_measurement_timestamp():
+    reading = {
+        'reading_timestamp_iso': '2026-10-24T12:00:00+00:00',
+        'calidad_aire': {'aqi_us': 55},
+        'coordenadas': {'lat': 25.7, 'lon': -100.3},
+    }
+
+    result = validate_reading_payload(reading, now=datetime(2026, 10, 24, 14, 0, tzinfo=timezone.utc))
+
+    assert result['valid'] is True
+
+
+def test_validate_reading_payload_respects_six_hour_rpc_freshness_limit():
+    now = datetime(2026, 10, 24, 14, 0, tzinfo=timezone.utc)
+    reading = {
+        'reading_timestamp_iso': (now - timedelta(hours=7)).isoformat(),
+        'calidad_aire': {'aqi_us': 55},
+        'coordenadas': {'lat': 25.7, 'lon': -100.3},
+    }
+
+    result = validate_reading_payload(reading, now=now)
+
+    assert result['valid'] is False
+    assert 'stale_reading_timestamp' in result['reasons']
+
+
+def test_validate_reading_payload_rejects_future_timestamp():
+    reading = {
+        'reading_timestamp_iso': '2026-10-24T14:30:00+00:00',
+        'calidad_aire': {'aqi_us': 55},
+        'coordenadas': {'lat': 25.7, 'lon': -100.3},
+    }
+
+    result = validate_reading_payload(reading, now=datetime(2026, 10, 24, 14, 0, tzinfo=timezone.utc))
+
+    assert result['valid'] is False
+    assert 'future_reading_timestamp' in result['reasons']

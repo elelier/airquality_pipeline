@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from update_city import update_city
 
@@ -13,6 +14,7 @@ def mock_supabase_client():
     with patch('update_city.get_supabase_client') as mock_get_client, \
          patch('update_city.log_pipeline_event'):
         mock_client = MagicMock()
+        mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = []
         mock_get_client.return_value = mock_client
         yield mock_client
 
@@ -22,7 +24,7 @@ def success_fetch_result():
     return {
         'city_id': 1,
         'status': 'success',
-        'reading_timestamp_iso': '2025-08-09T12:00:00+00:00',
+        'reading_timestamp_iso': (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
         'calidad_aire': {'aqi_us': 50},
         'clima': {'temperatura_c': 25},
         'coordenadas': {'lat': 25.0, 'lon': -100.0},
@@ -124,3 +126,68 @@ def test_update_city_skip(mock_supabase_client):
     assert result['updateError'] is None
     mock_supabase_client.table.return_value.insert.assert_not_called()
     mock_supabase_client.table.return_value.update.return_value.eq.assert_called_once_with('id', 3)
+
+
+def test_update_city_rejects_stale_measurement_without_refreshing_success(mock_supabase_client, success_fetch_result):
+    success_fetch_result['reading_timestamp_iso'] = (
+        datetime.now(timezone.utc) - timedelta(days=5)
+    ).isoformat()
+
+    result = update_city(success_fetch_result)
+
+    assert result['readingInserted'] is False
+    assert 'stale_reading_timestamp' in result['validationErrors']
+    assert mock_supabase_client.table.return_value.update.call_args.args[0]['last_update_status'] == 'error: stale_reading'
+    assert 'last_successful_update_at' not in mock_supabase_client.table.return_value.update.call_args.args[0]
+    mock_supabase_client.table.return_value.insert.assert_not_called()
+
+
+def test_update_city_skips_duplicate_recent_measurement(mock_supabase_client, success_fetch_result):
+    mock_supabase_client.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = [
+        {'reading_timestamp': success_fetch_result['reading_timestamp_iso']}
+    ]
+
+    result = update_city(success_fetch_result)
+
+    assert result['unchangedReading'] is True
+    assert result['readingInserted'] is False
+    assert mock_supabase_client.table.return_value.update.call_args.args[0]['last_update_status'] == 'skipped: unchanged_reading'
+    mock_supabase_client.table.return_value.insert.assert_not_called()
+
+
+def test_update_city_fails_closed_if_latest_reading_lookup_fails(mock_supabase_client, success_fetch_result):
+    mock_supabase_client.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.side_effect = RuntimeError('read unavailable')
+
+    result = update_city(success_fetch_result)
+
+    assert result['readingInserted'] is False
+    assert result['lookupError'] is not None
+    assert mock_supabase_client.table.return_value.update.call_args.args[0]['last_update_status'] == 'error: latest_reading_lookup_failed'
+    mock_supabase_client.table.return_value.insert.assert_not_called()
+
+
+def test_update_city_rejects_out_of_order_measurement(mock_supabase_client, success_fetch_result):
+    mock_supabase_client.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = [
+        {'reading_timestamp': datetime.now(timezone.utc).isoformat()}
+    ]
+
+    result = update_city(success_fetch_result)
+
+    assert result['readingInserted'] is False
+    assert result['unchangedReading'] is False
+    status = mock_supabase_client.table.return_value.update.call_args.args[0]
+    assert status['last_update_status'] == 'error: out_of_order_reading'
+    assert 'last_successful_update_at' not in status
+    mock_supabase_client.table.return_value.insert.assert_not_called()
+
+
+def test_update_city_does_not_mark_success_on_insert_error(mock_supabase_client, success_fetch_result):
+    mock_supabase_client.table.return_value.insert.return_value.execute.side_effect = RuntimeError('database insert failed')
+
+    result = update_city(success_fetch_result)
+
+    assert result['readingInserted'] is False
+    assert result['insertError'] is not None
+    status = mock_supabase_client.table.return_value.update.call_args.args[0]
+    assert status['last_update_status'] == 'error: insert_failed'
+    assert 'last_successful_update_at' not in status

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from supabase_client import get_supabase_client, log_pipeline_event
 from utils import validate_reading_payload
@@ -34,7 +34,10 @@ def update_city(fetch_or_skip_result: dict) -> dict:
                 if not validation.get("valid", False):
                     validation_errors = validation.get("reasons", [])
                     city_status_to_update = {
-                        'last_update_status': 'error: validation_failed',
+                        'last_update_status': (
+                            'error: stale_reading' if 'stale_reading_timestamp' in validation_errors
+                            else 'error: validation_failed'
+                        ),
                         'updated_at': datetime.utcnow().isoformat()
                     }
                     logging.warning(f"Lectura rechazada por validacion: {validation_errors}")
@@ -103,8 +106,10 @@ def update_city(fetch_or_skip_result: dict) -> dict:
     result = {
         'city_id': city_id,
         'readingInserted': False,
+        'unchangedReading': False,
         'cityStatusUpdated': False,
         'insertError': None,
+        'lookupError': None,
         'updateError': None,
         'validationErrors': validation_errors
     }
@@ -112,18 +117,58 @@ def update_city(fetch_or_skip_result: dict) -> dict:
     # --- Insert en air_quality_readings si aplica ---
     if reading_data_to_insert:
         try:
-            response = supabase.table('air_quality_readings').insert(reading_data_to_insert).execute()
-            # La inserción exitosa devuelve datos, así que podemos comprobar eso
-            if response.data:
-                result['readingInserted'] = True
-                logging.info(f"Lectura insertada: {response.data}")
-            else:
-                 # Si no hay datos, podría ser un error no lanzado
-                result['insertError'] = "No data returned from insert"
-                logging.error(f"Error al insertar lectura: No data returned")
+            latest_rows = (
+                supabase.table('air_quality_readings')
+                .select('reading_timestamp')
+                .eq('city_id', city_id)
+                .order('reading_timestamp', desc=True)
+                .limit(1)
+                .execute()
+                .data
+            )
+            if latest_rows:
+                latest_timestamp = datetime.fromisoformat(
+                    latest_rows[0]['reading_timestamp'].replace('Z', '+00:00')
+                ).astimezone(timezone.utc)
+                incoming_timestamp = datetime.fromisoformat(reading_ts.replace('Z', '+00:00'))
+                if incoming_timestamp <= latest_timestamp:
+                    result['unchangedReading'] = incoming_timestamp == latest_timestamp
+                    city_status_to_update = {
+                        'last_update_status': (
+                            'skipped: unchanged_reading' if result['unchangedReading']
+                            else 'error: out_of_order_reading'
+                        ),
+                        'updated_at': datetime.now(timezone.utc).isoformat(),
+                    }
+                    reading_data_to_insert = None
         except Exception as e:
-            result['insertError'] = str(e)
-            logging.error(f"Error al insertar lectura: {e}")
+            result['lookupError'] = type(e).__name__
+            city_status_to_update = {
+                'last_update_status': 'error: latest_reading_lookup_failed',
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }
+            reading_data_to_insert = None
+            logging.error('Error al comprobar la última lectura: %s', e)
+
+        if reading_data_to_insert:
+            try:
+                response = supabase.table('air_quality_readings').insert(reading_data_to_insert).execute()
+                # La inserción exitosa devuelve datos, así que podemos comprobar eso
+                if response.data:
+                    result['readingInserted'] = True
+                    logging.info(f"Lectura insertada: {response.data}")
+                else:
+                    result['insertError'] = "No data returned from insert"
+                    logging.error("Error al insertar lectura: No data returned")
+            except Exception as e:
+                result['insertError'] = str(e)
+                logging.error(f"Error al insertar lectura: {e}")
+
+            if result['insertError']:
+                city_status_to_update = {
+                    'last_update_status': 'error: insert_failed',
+                    'updated_at': datetime.now(timezone.utc).isoformat(),
+                }
 
     # --- Update en cities ---
     if city_status_to_update:

@@ -73,6 +73,7 @@ def build_summary(force_update: bool, provider: str) -> dict:
         "active_cities": 0,
         "updates_attempted": 0,
         "readings_inserted": 0,
+        "skipped_unchanged": 0,
         "skipped_up_to_date": 0,
         "skipped_unmapped": 0,
         "failed_updates": 0,
@@ -105,6 +106,7 @@ def log_pipeline_summary(summary: dict) -> None:
     logging.info("Ciudades activas: %s", safe_summary["active_cities"])
     logging.info("Updates intentados: %s", safe_summary["updates_attempted"])
     logging.info("Lecturas insertadas: %s", safe_summary["readings_inserted"])
+    logging.info("Lecturas recientes sin cambio: %s", safe_summary["skipped_unchanged"])
     logging.info("Ciudades sin actualizar por intervalo: %s", safe_summary["skipped_up_to_date"])
     logging.info("Ciudades sin mapping WAQI: %s", safe_summary["skipped_unmapped"])
     logging.info("Updates fallidos: %s", safe_summary["failed_updates"])
@@ -126,7 +128,11 @@ def assert_healthy_summary(summary: dict) -> None:
     if summary["active_cities"] == 0:
         raise PipelineRunError("No hay ciudades activas para actualizar.")
 
-    if summary["updates_attempted"] > 0 and summary["readings_inserted"] == 0:
+    if (
+        summary["updates_attempted"] > 0
+        and summary["readings_inserted"] == 0
+        and summary["skipped_unchanged"] == 0
+    ):
         raise PipelineRunError(
             "El pipeline intento actualizar ciudades pero no inserto ninguna lectura."
         )
@@ -218,6 +224,17 @@ def main(force_update=False) -> dict:
                 consecutive_failures = 0
                 summary["readings_inserted"] += 1
                 logging.info("[OK] Update realizado para %s: %s", city["api_name"], update_result)
+            elif (
+                update_result.get("unchangedReading")
+                and update_result.get("cityStatusUpdated")
+                and not update_result.get("updateError")
+                and not update_result.get("lookupError")
+            ):
+                consecutive_failures = 0
+                summary["skipped_unchanged"] += 1
+                logging.info(
+                    "[UNCHANGED] Lectura reciente ya registrada para %s.", city["api_name"]
+                )
             else:
                 error_type = fetch_result.get("errorType")
                 non_fatal_fetch_error = error_type in NON_FATAL_FETCH_ERROR_TYPES
@@ -256,7 +273,9 @@ def main(force_update=False) -> dict:
                     "weather_context_status": weather_context.get("status"),
                     "weather_context_error_type": weather_context.get("errorType"),
                     "reading_inserted": bool(update_result.get("readingInserted")),
+                    "unchanged_reading": bool(update_result.get("unchangedReading")),
                     "city_status_updated": bool(update_result.get("cityStatusUpdated")),
+                    "lookup_error": update_result.get("lookupError"),
                     "insert_error": update_result.get("insertError"),
                     "update_error": update_result.get("updateError"),
                     "validation_errors": update_result.get("validationErrors"),

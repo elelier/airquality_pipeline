@@ -97,6 +97,30 @@ When data is stale, run the workflow manually with:
 - `provider=waqi`
 
 This bypasses the timestamp interval check and attempts to refresh all active cities.
+It does **not** override the measurement freshness guard: an old WAQI timestamp
+must never become a new successful measurement just because the API returned HTTP 200.
+
+## Measurement freshness and duplicate guard
+
+The ingestion path validates `reading_timestamp_iso` against UTC **before writing**:
+
+- Older than **6 hours**: reject as `error: stale_reading` (aligned with the
+  default RPC unhealthy threshold below).
+- More than **5 minutes in the future**: reject as a validation error.
+- Same timestamp as the city's newest stored reading: `skipped: unchanged_reading`;
+  no duplicate insert and no new `last_successful_update_at`. This is not a job failure
+  while the timestamp itself is still fresh.
+- Earlier than the newest stored reading: `error: out_of_order_reading`;
+  never insert an older measurement over a newer one.
+- Latest-reading lookup or insert fails: mark the city as error, do not claim a
+  successful measurement. A failed batch makes the workflow unhealthy.
+
+The status of a stale or unavailable upstream feed is **not** a new AQI observation.
+Do not backfill, change timestamps, or infer AQI values to make the workflow green.
+If runs fail with `stale_reading_timestamp`, inspect the mapped station's WAQI
+`time.iso` and corroborate against its public station source before any mapping change.
+The `6h` write guard does not alter frontend freshness rules or RPC responses;
+those are separate contracts.
 
 ## RPC contract health check
 
@@ -166,14 +190,17 @@ Rollback:
 
 A run is healthy when:
 
-- at least one update was attempted and at least one reading was inserted, or
+- at least one update was attempted and at least one reading was inserted, or an
+  already-stored measurement still within the freshness guard was recognized;
+  remaining cities may only be skipped for an explicitly non-fatal reason, or
 - no updates were needed and at least one active city was skipped as up-to-date.
 
 A run is unhealthy when:
 
 - there are no active cities,
 - any fatal city update fails,
-- updates were attempted but zero readings were inserted,
+- updates were attempted but neither a reading was inserted nor a fresh,
+  unchanged measurement was recognized,
 - no active city was updated or skipped,
 - AQI, timestamp, or coordinates are missing/invalid for all attempted cities.
 
@@ -187,12 +214,14 @@ A run is unhealthy when:
 - active cities
 - updates attempted
 - readings inserted
+- fresh unchanged readings skipped
 - skipped cities
 - skipped unmapped cities
 - failed updates
 - fetch errors
 - validation failures
 - insert errors
+- latest-reading lookup errors (in per-city results)
 - update errors
 - per-city results
 
