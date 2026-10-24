@@ -5,6 +5,9 @@ import random
 import sys
 
 UPDATE_INTERVAL_MINUTES = 59  # Mantener el valor que decidiste
+# Align rejection with the existing RPC health check's unhealthy threshold.
+MAX_READING_AGE_HOURS = 6
+MAX_FUTURE_CLOCK_SKEW_MINUTES = 5
 MIN_INTER_CITY_DELAY_SECONDS = 8.0  # Aumentado de 5 a 8
 MAX_INTER_CITY_DELAY_SECONDS = 15.0  # Aumentado de 12 a 15
 
@@ -105,7 +108,7 @@ def compute_inter_city_delay(consecutive_failures: int = 0) -> float:
     return max(base, min(cap, delay_seconds + jitter))
 
 
-def validate_reading_payload(reading: dict) -> dict:
+def validate_reading_payload(reading: dict, now: datetime | None = None) -> dict:
     """Validate required reading fields and optional weather ranges.
 
     AQI and coordinates remain mandatory. Weather fields from WAQI can be
@@ -120,6 +123,21 @@ def validate_reading_payload(reading: dict) -> dict:
     coords = reading.get("coordenadas", {}) or {}
     lat = coords.get("lat")
     lon = coords.get("lon")
+
+    reading_timestamp = reading.get("reading_timestamp_iso")
+    if reading_timestamp is not None:
+        try:
+            measured_at = datetime.fromisoformat(reading_timestamp.replace("Z", "+00:00"))
+            if measured_at.tzinfo is None:
+                raise ValueError("measurement timestamp must include a timezone")
+            reference_time = now or datetime.now(timezone.utc)
+            age = reference_time - measured_at
+            if age > timedelta(hours=MAX_READING_AGE_HOURS):
+                reasons.append("stale_reading_timestamp")
+            elif age < -timedelta(minutes=MAX_FUTURE_CLOCK_SKEW_MINUTES):
+                reasons.append("future_reading_timestamp")
+        except (TypeError, AttributeError, ValueError):
+            reasons.append("invalid_reading_timestamp")
 
     if aqi_us is None or not isinstance(aqi_us, (int, float)):
         reasons.append("missing_or_invalid_aqi_us")
