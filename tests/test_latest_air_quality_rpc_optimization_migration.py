@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 MIGRATIONS = Path(__file__).resolve().parents[1] / "supabase" / "migrations"
-PRIOR_MIGRATION = MIGRATIONS / "20260525045500_update_latest_air_quality_rpc_weather_context.sql"
+PRIOR_MIGRATION = MIGRATIONS / "20260525125515_update_latest_air_quality_rpc_weather_context.sql"
 
 
 def optimized_migration() -> str:

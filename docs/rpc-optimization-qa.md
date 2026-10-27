@@ -97,7 +97,7 @@ versioned migration is applied and inspected in the approved environment.
 If the new RPC fails the agreed contract or latency gate:
 
 - Stop rollout and capture evidence. Recreate the previous SQL function body
-  from `20260525045500_update_latest_air_quality_rpc_weather_context.sql`
+  from `20260525125515_update_latest_air_quality_rpc_weather_context.sql`
   using **`CREATE OR REPLACE FUNCTION`** and the preserved signature.
 - **Do not rerun that historical file verbatim:** it starts with
   `DROP FUNCTION`, which would replace the function object and risk grants.

@@ -1,5 +1,3 @@
--- Story 1.4.8 migration file promotion only. Not applied in this story.
-
 alter table public.air_quality_readings
   add column if not exists weather_temperature_c real,
   add column if not exists weather_humidity_percent smallint,
