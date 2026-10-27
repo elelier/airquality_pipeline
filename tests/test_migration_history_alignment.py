@@ -25,7 +25,8 @@ UNAPPLIED_LEGACY_NAMES = (
 
 def test_applied_supabase_migrations_match_verified_remote_sql():
     for filename, expected_md5 in APPLIED_SNAPSHOT_MD5.items():
-        sql = (MIGRATIONS / filename).read_bytes()
+        # Git checkouts on Windows may convert LF to CRLF; compare canonical SQL bytes.
+        sql = (MIGRATIONS / filename).read_bytes().replace(b"\r\n", b"\n")
         assert hashlib.md5(sql, usedforsecurity=False).hexdigest() == expected_md5, filename
 
 
