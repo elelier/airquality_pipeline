@@ -16,6 +16,7 @@ def test_fetch_cities_success(mock_requests_get):
     mock_requests_get.return_value = mock_response
 
     cities = fetch_cities('fake_api_key')
+    assert mock_requests_get.call_args.args[0] == 'https://api.airvisual.com/v2/cities'
     assert len(cities) == 2
     assert cities[0]['city'] == 'Test City 1'
 
@@ -37,7 +38,7 @@ def test_fetch_air_quality_data_success(mock_requests_get):
         "status": "success",
         "data": {
             "current": {
-                "pollution": {"aqius": 50},
+                "pollution": {"aqius": 50, "ts": "2026-11-19T22:00:00Z"},
                 "weather": {"tp": 25}
             },
             "location": {
@@ -49,7 +50,29 @@ def test_fetch_air_quality_data_success(mock_requests_get):
 
     data = fetch_air_quality_data('Test City', 1, 'Nuevo Leon', 'Mexico', 'fake_api_key')
     assert data['status'] == 'success'
+    assert mock_requests_get.call_args.args[0] == 'https://api.airvisual.com/v2/city'
     assert data['calidad_aire']['aqi_us'] == 50
+    assert data['reading_timestamp_iso'] == '2026-11-19T22:00:00Z'
+
+
+@pytest.mark.parametrize('pollution_timestamp', [None, '2026-11-19T22:00:00'])
+def test_rejects_missing_or_timezone_free_pollution_timestamp(mock_requests_get, pollution_timestamp):
+    mock_requests_get.return_value.json.return_value = {
+        "status": "success",
+        "data": {
+            "current": {
+                "pollution": {"aqius": 50, "ts": pollution_timestamp},
+                "weather": {"ts": "2026-11-19T23:00:00Z"},
+            },
+            "location": {"coordinates": [-100.0, 25.0]},
+        },
+    }
+
+    data = fetch_air_quality_data('Test City', 1, 'Nuevo Leon', 'Mexico', 'fake_api_key')
+
+    assert data['status'] == 'error'
+    assert data['errorType'] == 'invalid_reading_timestamp'
+
 
 def test_fetch_air_quality_data_fetch_failed(mock_requests_get):
     """Test fetch_failed error during fetch_air_quality_data."""
