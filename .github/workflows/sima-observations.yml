@@ -2,7 +2,7 @@ name: Archive SIMA observations
 
 on:
   schedule:
-    - cron: '13,33,53 * * * *'
+    - cron: '13 */6 * * *'
   workflow_dispatch:
 
 permissions:
