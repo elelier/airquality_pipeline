@@ -47,7 +47,7 @@ def fetch_with_retry(url, retries=3, delay_ms=5000, params=None, timeout_seconds
 # ──────────────────────────────────────────────────────────────
 
 def fetch_cities(AIRVISUAL_API_KEY: str, state: str = "Nuevo Leon", country: str = "Mexico", max_retries: int = 3):
-    url = "http://api.airvisual.com/v2/cities"
+    url = "https://api.airvisual.com/v2/cities"
     params = {
         "state": state,
         "country": country,
@@ -87,7 +87,7 @@ def fetch_cities(AIRVISUAL_API_KEY: str, state: str = "Nuevo Leon", country: str
 def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY):
     logging.info(f"--- Iniciando fetchAirQualityData para City ID: {city_id} ({api_name}) ---")
 
-    url = "http://api.airvisual.com/v2/city"
+    url = "https://api.airvisual.com/v2/city"
     params = {
         "city": api_name,
         "state": state,
@@ -101,11 +101,22 @@ def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY)
         location_data = raw_api_data.get('data', {}).get('location', {})
         pollution_data = raw_api_data.get('data', {}).get('current', {}).get('pollution', {})
         weather_data = raw_api_data.get('data', {}).get('current', {}).get('weather', {})
-        timestamp_str = pollution_data.get('ts') or weather_data.get('ts') or None
-
-        updated_at_formatted = None
-        if timestamp_str:
-            updated_at_formatted = datetime.fromisoformat(timestamp_str).strftime('%d/%m/%Y %H:%M:%S')
+        timestamp_str = pollution_data.get('ts')
+        try:
+            measured_at = datetime.fromisoformat(timestamp_str)
+            if measured_at.utcoffset() is None:
+                raise ValueError('Falta la zona horaria.')
+        except (TypeError, ValueError):
+            message = 'AirVisual no devolvió una hora de medición de contaminación válida con zona horaria.'
+            logging.warning("[AirVisual] City ID %s: %s", city_id, message)
+            return {
+                'city_id': city_id,
+                'status': 'error',
+                'municipio': api_name,
+                'api_name_used': api_name,
+                'errorType': 'invalid_reading_timestamp',
+                'message': message,
+            }
 
         success_result = {
             'city_id': city_id,
@@ -130,7 +141,7 @@ def fetch_air_quality_data(api_name, city_id, state, country, AIRVISUAL_API_KEY)
                 'direccion_viento_deg': weather_data.get('wd', None),
                 'icono_clima': weather_data.get('ic', None)
             },
-            'ultima_actualizacion': updated_at_formatted or 'N/A',
+            'ultima_actualizacion': measured_at.strftime('%d/%m/%Y %H:%M:%S'),
             'reading_timestamp_iso': timestamp_str,
             'api_raw_response': raw_api_data.get('data', {})
         }
