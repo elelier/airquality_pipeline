@@ -62,3 +62,32 @@ def test_pipeline_rejects_stale_only_batch_even_if_all_fetches_were_http_200():
     assert summary['readings_inserted'] == 0
     assert summary['failed_updates'] == 1
     assert summary['validation_failures'] == 1
+
+
+def test_pipeline_treats_out_of_order_reading_as_non_fatal():
+    city = {'id': 9, 'api_name': 'Monterrey', 'is_active': True}
+    update_result = {
+        'readingInserted': False,
+        'unchangedReading': False,
+        'outOfOrderReading': True,
+        'cityStatusUpdated': True,
+        'insertError': None,
+        'lookupError': None,
+        'updateError': None,
+        'validationErrors': None,
+    }
+
+    with (
+        patch.object(pipeline, 'get_required_env', return_value={'WAQI_API_TOKEN': 'test'}),
+        patch.object(pipeline, 'get_cities_for_provider', return_value=({'provider': 'waqi'}, [city])),
+        patch.object(pipeline, 'check_if_update_needed', return_value={'needsUpdate': True}),
+        patch.object(pipeline, 'fetch_provider_air_quality', return_value={'status': 'success'}),
+        patch.object(pipeline, 'enrich_with_weather_context', return_value={'status': 'success'}),
+        patch.object(pipeline, 'update_city', return_value=update_result),
+        patch.object(pipeline, 'compute_inter_city_delay', return_value=0),
+        patch.object(pipeline, 'delay'),
+    ):
+        summary = pipeline.main()
+
+    assert summary['failed_updates'] == 0
+    assert summary['skipped_unchanged'] == 1

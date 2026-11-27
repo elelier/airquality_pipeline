@@ -3,7 +3,10 @@ name: Air Quality Pipeline
 on:
   pull_request:
   schedule:
-    - cron: '0 * * * *'
+    # GitHub descarta muchas ejecuciones programadas al inicio de la hora.
+    # Tres intentos por hora, fuera del minuto 0, para lograr ~24 lecturas al dia;
+    # las corridas extra se saltan las ciudades que ya estan al dia.
+    - cron: '7,27,47 * * * *'
   workflow_dispatch:
     inputs:
       force_update:
@@ -55,6 +58,13 @@ on:
         default: '100'
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: air-quality-${{ github.event_name == 'pull_request' && github.ref || 'pipeline' }}
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: windows-latest
@@ -76,7 +86,11 @@ jobs:
         run: pytest
 
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
     if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || (github.event.inputs.rpc_contract_health != 'true' && github.event.inputs.weather_history_backfill == 'false'))
     env:
       AIR_QUALITY_PROVIDER: ${{ github.event.inputs.provider || 'waqi' }}
@@ -128,6 +142,37 @@ jobs:
         with:
           name: pipeline-log
           path: pipeline.log
+      - name: Abrir alerta si la ingesta programada falla
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          title="Alerta: la ingesta de calidad del aire esta fallando"
+          open=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -z "$open" ]; then
+            gh issue create --title "$title" --body "La corrida programada fallo y no se guardaron lecturas nuevas.
+
+          Ultima corrida fallida: $RUN_URL
+
+          Este issue se cierra solo cuando una corrida vuelva a guardar lecturas."
+          else
+            echo "Alerta ya abierta: #$open"
+          fi
+      - name: Cerrar alerta cuando la ingesta se recupera
+        if: success() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          title="Alerta: la ingesta de calidad del aire esta fallando"
+          for n in $(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "La ingesta se recupero en $RUN_URL"
+          done
 
   rpc-contract-health:
     runs-on: windows-latest

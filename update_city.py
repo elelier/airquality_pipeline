@@ -107,6 +107,7 @@ def update_city(fetch_or_skip_result: dict) -> dict:
         'city_id': city_id,
         'readingInserted': False,
         'unchangedReading': False,
+        'outOfOrderReading': False,
         'cityStatusUpdated': False,
         'insertError': None,
         'lookupError': None,
@@ -133,6 +134,7 @@ def update_city(fetch_or_skip_result: dict) -> dict:
                 incoming_timestamp = datetime.fromisoformat(reading_ts.replace('Z', '+00:00'))
                 if incoming_timestamp <= latest_timestamp:
                     result['unchangedReading'] = incoming_timestamp == latest_timestamp
+                    result['outOfOrderReading'] = not result['unchangedReading']
                     city_status_to_update = {
                         'last_update_status': (
                             'skipped: unchanged_reading' if result['unchangedReading']
