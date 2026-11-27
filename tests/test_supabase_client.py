@@ -47,6 +47,8 @@ def test_get_existing_cities_success(mock_get_supabase_client):
     cities = supabase_client.get_existing_cities()
     assert len(cities) == 1
     assert cities[0]['id'] == 1
+    selected = mock_supabase.table.return_value.select.call_args.args[0]
+    assert "latitude" in selected and "longitude" in selected
 
 
 @patch('supabase_client.get_supabase_client')
