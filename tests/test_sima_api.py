@@ -40,7 +40,7 @@ def test_fetch_returns_waqi_shaped_valid_reading():
     assert result["status"] == "success"
     assert result["provider"] == "sima"
     assert result["calidad_aire"] == {
-        "aqi_us": 31,
+        "aqi_us": 32,
         "contaminante_principal_us": "o3",
         "aqi_cn": None,
         "contaminante_principal_cn": None,
@@ -102,3 +102,24 @@ def test_pipeline_returns_waqi_error_when_both_sources_fail():
         patch.object(pipeline, "fetch_sima_air_quality_data", return_value={"status": "error"}),
     ):
         assert pipeline.fetch_provider_air_quality("waqi", city, {"WAQI_API_TOKEN": "t"}) is waqi_error
+
+
+@pytest.mark.parametrize(
+    ("pollutant", "concentration", "expected"),
+    [
+        ("PM25", 9.0, 50),
+        ("PM25", 35.49, 100),
+        ("PM25", 55.5, 151),
+        ("PM10", 36, 33),
+        ("O3", 35, 32),
+        ("CO", 0.0, 0),
+        ("PM10", 900, 500),
+    ],
+)
+def test_concentration_to_us_aqi_uses_epa_breakpoints(pollutant, concentration, expected):
+    assert sima_api.concentration_to_us_aqi(pollutant, concentration) == expected
+
+
+def test_concentration_to_us_aqi_rejects_unknown_or_invalid():
+    assert sima_api.concentration_to_us_aqi("XYZ", 10) is None
+    assert sima_api.concentration_to_us_aqi("PM25", -1) is None
