@@ -114,6 +114,10 @@ def test_pipeline_returns_waqi_error_when_both_sources_fail():
         ("O3", 35, 32),
         ("CO", 0.0, 0),
         ("PM10", 900, 500),
+        ("O3", 200, 300),
+        ("O3", 201, 201),
+        ("O3", 300, 248),
+        ("O3", 450, 346),
     ],
 )
 def test_concentration_to_us_aqi_uses_epa_breakpoints(pollutant, concentration, expected):
