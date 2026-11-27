@@ -3,10 +3,9 @@ name: Air Quality Pipeline
 on:
   pull_request:
   schedule:
-    # GitHub descarta muchas ejecuciones programadas al inicio de la hora.
-    # Tres intentos por hora, fuera del minuto 0, para lograr ~24 lecturas al dia;
-    # las corridas extra se saltan las ciudades que ya estan al dia.
-    - cron: '7,27,47 * * * *'
+    # Cada 3 horas (intervalo original del proyecto) para no sobrecargar Actions.
+    # Minuto 7 porque GitHub descarta muchas corridas programadas en el minuto 0.
+    - cron: '7 */3 * * *'
   workflow_dispatch:
     inputs:
       force_update:
