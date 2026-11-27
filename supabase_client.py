@@ -85,7 +85,7 @@ def get_existing_cities():
 
     try:
         logging.info("Querying 'cities' table for columns: id, api_name, is_active...")
-        response = supabase.table("cities").select("id, api_name, is_active, last_successful_update_at, last_update_status").execute()
+        response = supabase.table("cities").select("id, api_name, is_active, last_successful_update_at, last_update_status, latitude, longitude").execute()
 
         if not isinstance(response.data, list):
             raise ValueError("Supabase response is not an array.")
