@@ -313,3 +313,11 @@ The frontend only consumes the data. Pipeline health must be validated from this
 ## Attribution
 
 WAQI/AQICN data usage requires attribution to the World Air Quality Index Project and the originating EPA/source. Keep this attribution in documentation and product surfaces as needed.
+
+## Respaldo SIMA y alerta de fallo (noviembre 2026)
+
+- Desde el 12 de noviembre de 2026 el feed de WAQI para las estaciones de Nuevo León dejó de actualizarse (responde HTTP 200 con la lectura de las 16:00 UTC de ese día). El pipeline rechazaba todo como `stale_reading`.
+- Ahora, si WAQI falla o entrega una lectura con más de `MAX_READING_AGE_HOURS`, `main.py` lee el visor oficial del SIMA (`sima_api.py`) toma la concentración NowCast del contaminante dominante de la estación principal del municipio y la convierte a AQI de la EPA con los puntos de corte oficiales. Esas filas llevan `raw_api_response.provider = "sima"`.
+- `aqi_us` siempre queda en escala EPA. El índice propio del SIMA (AIRE y SALUD, NOM-172) se guarda solo como referencia en `raw_api_response.sima_index`. El contaminante dominante es el que elige el SIMA.
+- El cron corre cada 3 horas en el minuto 7 (`7 */3 * * *`, hasta 8 lecturas por municipio al día) para no sobrecargar GitHub Actions. Se evita el minuto 0 porque GitHub descartaba ahí la mayoría de las corridas programadas.
+- Si una corrida programada falla se abre el issue "Alerta: la ingesta de calidad del aire esta fallando"; se cierra solo con la siguiente corrida exitosa.

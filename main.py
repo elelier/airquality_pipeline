@@ -10,7 +10,8 @@ from airvisual_api import fetch_cities as fetch_airvisual_cities
 from supabase_client import get_existing_cities
 from sync_cities import sync_cities
 from update_city import update_city
-from utils import check_if_update_needed, compute_inter_city_delay, delay, setup_logging
+from sima_api import fetch_air_quality_data as fetch_sima_air_quality_data
+from utils import check_if_update_needed, compute_inter_city_delay, delay, setup_logging, validate_reading_payload
 from waqi_api import fetch_air_quality_data as fetch_waqi_air_quality_data
 from weather_context import enrich_with_weather_context
 
@@ -83,6 +84,7 @@ def build_summary(force_update: bool, provider: str) -> dict:
         "update_errors": 0,
         "weather_context_success": 0,
         "weather_context_errors": 0,
+        "sima_fallbacks": 0,
         "city_results": [],
         "sync_summary": None,
     }
@@ -116,6 +118,7 @@ def log_pipeline_summary(summary: dict) -> None:
     logging.info("Errores de update status: %s", safe_summary["update_errors"])
     logging.info("Weather context exitoso: %s", safe_summary["weather_context_success"])
     logging.info("Weather context errores: %s", safe_summary["weather_context_errors"])
+    logging.info("Lecturas obtenidas de SIMA (respaldo): %s", safe_summary.get("sima_fallbacks", 0))
 
     if safe_summary.get("sync_summary") is not None:
         logging.info("Sync summary: %s", safe_summary["sync_summary"])
@@ -159,13 +162,44 @@ def get_cities_for_provider(provider: str, env: dict[str, str]) -> tuple[dict, l
     return sync_cities(api_cities, db_cities)
 
 
+def is_usable_reading(fetch_result: dict) -> bool:
+    if fetch_result.get("status") != "success":
+        return False
+    return validate_reading_payload(fetch_result).get("valid", False)
+
+
+def fetch_waqi_with_sima_fallback(city: dict, env: dict[str, str]) -> dict:
+    """Use WAQI first; if its feed fails or is stale, read SIMA directly."""
+    waqi_result = fetch_waqi_air_quality_data(
+        api_name=city["api_name"],
+        city_id=city["id"],
+        waqi_api_token=env["WAQI_API_TOKEN"],
+    )
+    if is_usable_reading(waqi_result):
+        return waqi_result
+
+    logging.warning(
+        "[FALLBACK] WAQI no entrego una lectura vigente para %s (%s). Intentando SIMA.",
+        city["api_name"],
+        waqi_result.get("errorType") or "stale_or_invalid",
+    )
+    sima_result = fetch_sima_air_quality_data(
+        api_name=city["api_name"],
+        city_id=city["id"],
+        latitude=city.get("latitude"),
+        longitude=city.get("longitude"),
+    )
+    if is_usable_reading(sima_result):
+        sima_result["fallback_from"] = "waqi"
+        return sima_result
+
+    logging.warning("[FALLBACK] SIMA tampoco entrego una lectura vigente para %s.", city["api_name"])
+    return waqi_result
+
+
 def fetch_provider_air_quality(provider: str, city: dict, env: dict[str, str]) -> dict:
     if provider == "waqi":
-        return fetch_waqi_air_quality_data(
-            api_name=city["api_name"],
-            city_id=city["id"],
-            waqi_api_token=env["WAQI_API_TOKEN"],
-        )
+        return fetch_waqi_with_sima_fallback(city, env)
 
     return fetch_airvisual_air_quality_data(
         api_name=city["api_name"],
@@ -200,6 +234,8 @@ def main(force_update=False) -> dict:
 
             fetch_result = fetch_provider_air_quality(provider, city, env)
             fetch_result["city_id"] = city["id"]
+            if fetch_result.get("fallback_from"):
+                summary["sima_fallbacks"] += 1
             fetch_result = enrich_with_weather_context(
                 fetch_result,
                 canonical_lat=city.get("latitude"),
@@ -225,7 +261,7 @@ def main(force_update=False) -> dict:
                 summary["readings_inserted"] += 1
                 logging.info("[OK] Update realizado para %s: %s", city["api_name"], update_result)
             elif (
-                update_result.get("unchangedReading")
+                (update_result.get("unchangedReading") or update_result.get("outOfOrderReading"))
                 and update_result.get("cityStatusUpdated")
                 and not update_result.get("updateError")
                 and not update_result.get("lookupError")
@@ -269,6 +305,7 @@ def main(force_update=False) -> dict:
                 {
                     "needed_update": True,
                     "fetch_status": fetch_result.get("status"),
+                    "provider_used": fetch_result.get("provider"),
                     "fetch_error_type": fetch_result.get("errorType"),
                     "weather_context_status": weather_context.get("status"),
                     "weather_context_error_type": weather_context.get("errorType"),
